@@ -379,6 +379,7 @@ export default function HistoryPage() {
                     setIsDetailOpen(true);
                   }}
                   onExportSelected={() => setIsExportOpen(true)}
+                  hasSearched={true}
                 />
               ) : (
                 <LeadCards
@@ -387,6 +388,7 @@ export default function HistoryPage() {
                     setActiveLead(lead);
                     setIsDetailOpen(true);
                   }}
+                  hasSearched={true}
                 />
               )}
             </div>

@@ -28,6 +28,7 @@ const INITIAL_FILTERS: LeadFilters = {
   hasWebsiteOnly: false,
   minRating: 0,
   category: "All Categories",
+  provider: "osm",
 };
 
 export default function Home() {
@@ -101,11 +102,15 @@ export default function Home() {
   const handleSearch = async () => {
     setIsSearching(true);
     setHasSearched(true);
+    const providerName =
+      filters.provider === "serpapi" ? "SerpApi (Google Maps)" : "OpenStreetMap";
+
     try {
       const params = new URLSearchParams({
         query: filters.query,
         state: filters.state,
         category: filters.category,
+        provider: filters.provider || "osm",
       });
 
       const res = await fetch(`/api/leads?${params.toString()}`);
@@ -114,12 +119,13 @@ export default function Home() {
       if (data.success && Array.isArray(data.leads)) {
         setLeads(data.leads);
         setSelectedIds([]);
-        const queryLabel = filters.query ? `for "${filters.query}"` : "";
-        const catLabel =
-          filters.category !== "All Categories" ? `in ${filters.category}` : "";
-        toast.success(
-          `Found ${data.leads.length} leads ${queryLabel} ${catLabel} (${filters.state}) and saved to Neon database`
-        );
+        if (data.leads.length === 0) {
+          toast.info(`No leads found via ${providerName} for this criteria`);
+        } else {
+          toast.success(
+            `Found ${data.leads.length} leads via ${providerName} and saved to database`
+          );
+        }
       } else {
         toast.error("Failed to fetch leads from server");
       }

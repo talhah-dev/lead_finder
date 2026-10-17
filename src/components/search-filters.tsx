@@ -33,11 +33,11 @@ export function SearchFilters({
     <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-          <div className="relative md:col-span-4">
+          <div className="relative md:col-span-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
-              placeholder="Service or business name..."
+              placeholder="Business name or keyword..."
               value={filters.query}
               onChange={(e) => onFilterChange({ query: e.target.value })}
               onKeyDown={(e) => {
@@ -47,7 +47,7 @@ export function SearchFilters({
             />
           </div>
 
-          <div className="md:col-span-3">
+          <div className="md:col-span-2">
             <Select
               value={filters.state}
               onValueChange={(val) => {
@@ -55,9 +55,9 @@ export function SearchFilters({
               }}
             >
               <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="Select US State" />
+                <SelectValue placeholder="State" />
               </SelectTrigger>
-              <SelectContent className="min-w-56">
+              <SelectContent className="min-w-48">
                 {US_STATES.map((state) => (
                   <SelectItem key={state} value={state}>
                     {state}
@@ -77,12 +77,33 @@ export function SearchFilters({
               <SelectTrigger className="w-full h-10">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
-              <SelectContent className="min-w-64">
+              <SelectContent className="min-w-56">
                 {CATEGORIES.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="md:col-span-2">
+            <Select
+              value={filters.provider || "osm"}
+              onValueChange={(val) => {
+                if (val) onFilterChange({ provider: val as "osm" | "serpapi" });
+              }}
+            >
+              <SelectTrigger className="w-full h-10">
+                <SelectValue placeholder="Provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="osm">
+                  OpenStreetMap (Free)
+                </SelectItem>
+                <SelectItem value="serpapi">
+                  SerpApi (Google Maps)
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

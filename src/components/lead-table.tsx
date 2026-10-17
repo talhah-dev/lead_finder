@@ -141,7 +141,7 @@ export function LeadTable({
     );
   }
 
-  if (!hasSearched) {
+  if (!hasSearched && leads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
         <Search className="size-10 text-muted-foreground/60 mb-3" />

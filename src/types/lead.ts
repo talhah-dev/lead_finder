@@ -40,4 +40,5 @@ export interface LeadFilters {
   hasWebsiteOnly: boolean;
   minRating: number;
   category: string;
+  provider?: "osm" | "serpapi";
 }

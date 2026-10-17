@@ -6,8 +6,11 @@ A modern, high-performance web application designed to discover, extract, and en
 
 ## Key Features
 
-- **Google Maps Places Search**: Extract business names, physical addresses, ratings, review counts, direct phone numbers, and official websites.
+- **Multi-Provider Search Engine**:
+  - **OpenStreetMap / Overpass (Default & 100% Free Forever)**: Unlimited lead extraction with zero credit card required, zero API keys needed, and global coverage.
+  - **SerpApi (Google Maps)**: Direct Google Maps scraping via SerpApi for users wanting official Google Maps POI data.
 - **Automated Email & Social Enrichment**: An internal background crawler visits each business website (home, `/contact`, `/about`) to extract direct emails, verified domains, and social media handles (LinkedIn, Facebook, Instagram).
+- **100% Real Leads**: Completely free of dummy or mock fallback data. All results are fetched live from the selected provider.
 - **Neon Serverless PostgreSQL Database**: Searches and scraped leads are automatically stored with relational search session history.
 - **Search History Dashboard (`/history`)**: Revisit past searches, inspect leads, re-export datasets, or manage historical records.
 - **One-Click Export**: Download datasets directly as formatted **CSV** (for Excel, Google Sheets, CRM import) or **JSON**.
@@ -20,6 +23,7 @@ A modern, high-performance web application designed to discover, extract, and en
 - **Framework**: [Next.js 16](https://nextjs.org/) (App Router & Turbopack)
 - **UI & Styling**: React 19, [Tailwind CSS v4](https://tailwindcss.com/), [shadcn UI](https://ui.shadcn.com/)
 - **Database**: [Neon Serverless PostgreSQL](https://neon.tech/) via `@neondatabase/serverless`
+- **Data Providers**: OpenStreetMap (Overpass & Nominatim) + SerpApi (Google Maps)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Notifications**: [Sonner](https://sonner.emilkowal.ski/)
 
@@ -40,14 +44,15 @@ npm install
 Create or update your `.env.local` file in the project root:
 
 ```env
-# Neon Serverless PostgreSQL Connection String
+# Neon Serverless PostgreSQL Connection String (Required for saving searches & leads)
 DATABASE_URL="postgresql://neondb_owner:YOUR_PASSWORD@ep-YOUR-ENDPOINT.neon.tech/neondb?sslmode=require&channel_binding=require"
 
-# Google Places API Key (from Google Cloud Console)
-GOOGLE_PLACES_API_KEY="AIzaSyYourGoogleApiKeyHere"
-```
+# Option 1: OpenStreetMap / Overpass (Default)
+# NO API KEY OR CREDIT CARD REQUIRED! Works out of the box with 100% free unlimited access.
 
-> **Note**: Even before adding your Google API key, the application includes a realistic data provider and direct website crawler for local development.
+# Option 2: SerpApi for Google Maps (Optional)
+SERPAPI_KEY="your_serpapi_key_here"
+```
 
 ### 4. Running Locally
 Start the development server:
@@ -59,15 +64,13 @@ Open [http://localhost:3000](http://localhost:3000) (or `http://localhost:3001` 
 
 ---
 
-## How to Get Your Google Places API Key
+## How to Get Your Free SerpApi Key (No Credit Card Required)
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create or select a project.
-3. Navigate to **APIs & Services > Library**.
-4. Search for **Places API (New)** and click **Enable**.
-5. Go to **APIs & Services > Credentials**.
-6. Click **+ CREATE CREDENTIALS > API key**.
-7. Copy your key and paste it into `.env.local` under `GOOGLE_PLACES_API_KEY`.
+1. Go to [serpapi.com](https://serpapi.com) and click **Sign Up** (use Google, GitHub, or any email).
+2. Go to your SerpApi Dashboard.
+3. Copy your **Private API Key**.
+4. Paste it into `.env.local` as `SERPAPI_KEY="your_key_here"`.
+5. You get **100 free searches every month** to extract real Google Maps businesses with phones, addresses, and websites!
 
 ---
 

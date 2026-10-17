@@ -84,12 +84,12 @@ export function LeadDetailSheet({
               {lead.name}
             </SheetTitle>
             <SheetDescription className="flex items-center gap-2 text-xs mt-1">
-              <div className="flex items-center text-amber-500 font-semibold">
+              <span className="flex items-center text-amber-500 font-semibold">
                 <Star className="size-3.5 fill-amber-500 mr-1" />
                 <span>{lead.rating.toFixed(1)}</span>
-              </div>
+              </span>
               <span>•</span>
-              <span>{lead.reviewCount} Google Reviews</span>
+              <span>{lead.reviewCount} Reviews</span>
               <span>•</span>
               <span className="text-emerald-600 font-medium">Verified Listing</span>
             </SheetDescription>

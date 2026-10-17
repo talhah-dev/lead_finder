@@ -8,8 +8,9 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get("query") || "";
     const state = searchParams.get("state") || "California";
     const category = searchParams.get("category") || "All Categories";
+    const provider = (searchParams.get("provider") as "osm" | "serpapi") || "osm";
 
-    const leads = await searchGoogleMapsLeads({ query, state, category });
+    const leads = await searchGoogleMapsLeads({ query, state, category, provider });
 
     const searchId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
