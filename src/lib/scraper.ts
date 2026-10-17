@@ -370,73 +370,104 @@ export async function searchWithNominatim(params: {
   return [];
 }
 
+interface SerpApiLocalResult {
+  place_id?: string;
+  title?: string;
+  type?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  reviews?: number;
+  operating_hours?: string;
+  open_state?: string;
+}
+
 async function searchWithSerpApi(params: {
   query: string;
   state: string;
   category: string;
+  limit?: number;
 }): Promise<Lead[]> {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey || apiKey.trim().length < 5) return [];
 
+  const targetCount = params.limit || 20;
+  const numPages = Math.min(Math.ceil(targetCount / 20), 5);
+
   try {
     const searchTerm = `${params.query || params.category} in ${params.state || "California"}, USA`;
-    const url = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
-      searchTerm
-    )}&api_key=${apiKey.trim()}`;
+    const allItems: SerpApiLocalResult[] = [];
 
-    const res = await fetch(url);
-    const data = await res.json();
+    for (let page = 0; page < numPages; page++) {
+      const start = page * 20;
+      const url = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
+        searchTerm
+      )}&start=${start}&api_key=${apiKey.trim()}`;
 
-    if (data.local_results && Array.isArray(data.local_results)) {
-      const leads: Lead[] = [];
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const data = await res.json();
 
-      for (const item of data.local_results.slice(0, 20)) {
-        let email: string | null = null;
-        let emailStatus: EmailStatus = "not_found";
-
-        const website = item.website || "";
-        if (website) {
-          const enriched = await extractEmailFromWebsite(website);
-          email = enriched.email;
-          emailStatus = enriched.status;
-        }
-
-        const addressParts = (item.address || "").split(",");
-        const city =
-          addressParts.length > 1
-            ? addressParts[addressParts.length - 2].trim()
-            : params.state || "California";
-
-        leads.push({
-          id: `serp-${item.place_id || Math.random().toString(36).slice(2, 9)}`,
-          name: item.title || "Business",
-          category:
-            params.category !== "All Categories"
-              ? params.category
-              : item.type || "Local Business",
-          phone: item.phone || "",
-          email,
-          emailStatus,
-          website,
-          address: item.address || "",
-          city,
-          state: params.state || "California",
-          zip: "",
-          rating: Number(item.rating) || 4.5,
-          reviewCount: Number(item.reviews) || 10,
-          placeId: item.place_id || "",
-          status: "New",
-          scrapedAt: new Date().toISOString().slice(0, 10),
-          openingHours:
-            typeof item.operating_hours === "string"
-              ? item.operating_hours
-              : item.open_state || "",
-          enrichmentDetails: {
-            sourceUrl: website,
-            domainVerified: Boolean(website),
-          },
-        });
+      if (data.local_results && Array.isArray(data.local_results)) {
+        allItems.push(...(data.local_results as SerpApiLocalResult[]));
+        if (data.local_results.length < 20) break;
+      } else {
+        break;
       }
+    }
+
+    if (allItems.length > 0) {
+      const itemsToProcess = allItems.slice(0, targetCount);
+      const leads: Lead[] = await Promise.all(
+        itemsToProcess.map(async (item: SerpApiLocalResult) => {
+          let email: string | null = null;
+          let emailStatus: EmailStatus = "not_found";
+
+          const website = item.website || "";
+          if (website) {
+            const enriched = await extractEmailFromWebsite(website);
+            email = enriched.email;
+            emailStatus = enriched.status;
+          }
+
+          const addressParts = (item.address || "").split(",");
+          const city =
+            addressParts.length > 1
+              ? addressParts[addressParts.length - 2].trim()
+              : params.state || "California";
+
+          return {
+            id: `serp-${item.place_id || Math.random().toString(36).slice(2, 9)}`,
+            name: item.title || "Business",
+            category:
+              params.category !== "All Categories"
+                ? params.category
+                : item.type || "Local Business",
+            phone: item.phone || "",
+            email,
+            emailStatus,
+            website,
+            address: item.address || "",
+            city,
+            state: params.state || "California",
+            zip: "",
+            rating: Number(item.rating) || 4.5,
+            reviewCount: Number(item.reviews) || 10,
+            placeId: item.place_id || "",
+            status: "New",
+            scrapedAt: new Date().toISOString().slice(0, 10),
+            openingHours:
+              typeof item.operating_hours === "string"
+                ? item.operating_hours
+                : item.open_state || "",
+            enrichmentDetails: {
+              sourceUrl: website,
+              domainVerified: Boolean(website),
+            },
+          } as Lead;
+        })
+      );
 
       return leads;
     }
@@ -450,6 +481,7 @@ export async function searchGoogleMapsLeads(params: {
   state: string;
   category: string;
   provider?: "osm" | "serpapi";
+  limit?: number;
 }): Promise<Lead[]> {
   const provider = params.provider || "osm";
 

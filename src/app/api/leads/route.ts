@@ -9,8 +9,9 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state") || "California";
     const category = searchParams.get("category") || "All Categories";
     const provider = (searchParams.get("provider") as "osm" | "serpapi") || "osm";
+    const limit = Number(searchParams.get("limit")) || 20;
 
-    const leads = await searchGoogleMapsLeads({ query, state, category, provider });
+    const leads = await searchGoogleMapsLeads({ query, state, category, provider, limit });
 
     const searchId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 

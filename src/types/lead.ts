@@ -41,4 +41,5 @@ export interface LeadFilters {
   minRating: number;
   category: string;
   provider?: "osm" | "serpapi";
+  limit?: number;
 }

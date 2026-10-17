@@ -29,6 +29,7 @@ const INITIAL_FILTERS: LeadFilters = {
   minRating: 0,
   category: "All Categories",
   provider: "osm",
+  limit: 20,
 };
 
 export default function Home() {
@@ -111,6 +112,7 @@ export default function Home() {
         state: filters.state,
         category: filters.category,
         provider: filters.provider || "osm",
+        limit: String(filters.limit || 20),
       });
 
       const res = await fetch(`/api/leads?${params.toString()}`);
