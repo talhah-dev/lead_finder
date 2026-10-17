@@ -17,7 +17,6 @@ import { ExportDialog } from "@/components/export-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MOCK_LEADS } from "@/data/mockLeads";
 import { Lead, LeadFilters } from "@/types/lead";
 import { toast } from "sonner";
 
@@ -33,6 +32,8 @@ const INITIAL_FILTERS: LeadFilters = {
 
 export default function Home() {
   const [filters, setFilters] = useState<LeadFilters>(INITIAL_FILTERS);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -41,7 +42,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("table");
 
   const filteredLeads = useMemo(() => {
-    return MOCK_LEADS.filter((lead) => {
+    return leads.filter((lead) => {
       if (filters.state && filters.state !== "All States") {
         if (lead.state.toLowerCase() !== filters.state.toLowerCase()) {
           return false;
@@ -83,7 +84,7 @@ export default function Home() {
 
       return true;
     });
-  }, [filters]);
+  }, [leads, filters]);
 
   const handleFilterChange = (updated: Partial<LeadFilters>) => {
     setFilters((prev) => ({ ...prev, ...updated }));
@@ -91,21 +92,42 @@ export default function Home() {
 
   const handleResetFilters = () => {
     setFilters(INITIAL_FILTERS);
+    setLeads([]);
+    setHasSearched(false);
     setSelectedIds([]);
     toast.info("Filters reset to default");
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     setIsSearching(true);
-    setTimeout(() => {
+    setHasSearched(true);
+    try {
+      const params = new URLSearchParams({
+        query: filters.query,
+        state: filters.state,
+        category: filters.category,
+      });
+
+      const res = await fetch(`/api/leads?${params.toString()}`);
+      const data = await res.json();
+
+      if (data.success && Array.isArray(data.leads)) {
+        setLeads(data.leads);
+        setSelectedIds([]);
+        const queryLabel = filters.query ? `for "${filters.query}"` : "";
+        const catLabel =
+          filters.category !== "All Categories" ? `in ${filters.category}` : "";
+        toast.success(
+          `Found ${data.leads.length} leads ${queryLabel} ${catLabel} (${filters.state}) and saved to Neon database`
+        );
+      } else {
+        toast.error("Failed to fetch leads from server");
+      }
+    } catch {
+      toast.error("Server error while searching leads");
+    } finally {
       setIsSearching(false);
-      const queryLabel = filters.query ? `matching "${filters.query}"` : "";
-      const catLabel =
-        filters.category !== "All Categories" ? `in ${filters.category}` : "";
-      toast.success(
-        `Found ${filteredLeads.length} leads ${queryLabel} ${catLabel} (${filters.state})`.trim()
-      );
-    }, 350);
+    }
   };
 
   const handleOpenLead = (lead: Lead) => {
@@ -116,7 +138,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar
-        onExportClick={() => setIsExportOpen(true)}
+        onExportClick={filteredLeads.length > 0 ? () => setIsExportOpen(true) : undefined}
         totalLeads={filteredLeads.length}
       />
 
@@ -133,7 +155,7 @@ export default function Home() {
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
             Extract business names, direct phone numbers, verified emails, and websites
-            across any US state and industry.
+            across any US state and industry. Every search is automatically saved to your Neon database.
           </p>
         </div>
 
@@ -145,7 +167,9 @@ export default function Home() {
           isSearching={isSearching}
         />
 
-        <LeadMetrics leads={filteredLeads} />
+        {hasSearched && filteredLeads.length > 0 && (
+          <LeadMetrics leads={filteredLeads} />
+        )}
 
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -153,9 +177,11 @@ export default function Home() {
               <h2 className="text-base font-semibold tracking-tight">
                 Business Leads
               </h2>
-              <Badge variant="secondary" className="font-mono text-xs">
-                {filteredLeads.length} Results
-              </Badge>
+              {hasSearched && (
+                <Badge variant="secondary" className="font-mono text-xs">
+                  {filteredLeads.length} Results
+                </Badge>
+              )}
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
@@ -181,6 +207,7 @@ export default function Home() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsExportOpen(true)}
+                disabled={filteredLeads.length === 0}
                 className="gap-1.5 h-8 text-xs"
               >
                 <Download className="size-3.5" />
@@ -196,9 +223,16 @@ export default function Home() {
               onSelectChange={setSelectedIds}
               onLeadClick={handleOpenLead}
               onExportSelected={() => setIsExportOpen(true)}
+              isLoading={isSearching}
+              hasSearched={hasSearched}
             />
           ) : (
-            <LeadCards leads={filteredLeads} onLeadClick={handleOpenLead} />
+            <LeadCards
+              leads={filteredLeads}
+              onLeadClick={handleOpenLead}
+              isLoading={isSearching}
+              hasSearched={hasSearched}
+            />
           )}
         </div>
       </main>

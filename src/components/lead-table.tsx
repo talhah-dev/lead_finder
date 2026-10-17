@@ -8,6 +8,7 @@ import {
   Copy,
   Eye,
   Building,
+  Search,
 } from "lucide-react";
 import {
   Table,
@@ -20,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Lead } from "@/types/lead";
 import { toast } from "sonner";
 
@@ -29,6 +31,8 @@ interface LeadTableProps {
   onSelectChange: (ids: string[]) => void;
   onLeadClick: (lead: Lead) => void;
   onExportSelected: () => void;
+  isLoading?: boolean;
+  hasSearched?: boolean;
 }
 
 export function LeadTable({
@@ -37,6 +41,8 @@ export function LeadTable({
   onSelectChange,
   onLeadClick,
   onExportSelected,
+  isLoading = false,
+  hasSearched = false,
 }: LeadTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -80,6 +86,72 @@ export function LeadTable({
     navigator.clipboard.writeText(emails);
     toast.success(`Copied ${selectedIds.length} email(s) to clipboard`);
   };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card overflow-hidden shadow-xs">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="w-10 px-3"></TableHead>
+              <TableHead className="min-w-[220px]">Business Name</TableHead>
+              <TableHead className="min-w-[110px]">Rating</TableHead>
+              <TableHead className="min-w-[150px]">Phone Number</TableHead>
+              <TableHead className="min-w-[200px]">Enriched Email</TableHead>
+              <TableHead className="min-w-[160px]">Website</TableHead>
+              <TableHead className="min-w-[140px]">Location</TableHead>
+              <TableHead className="w-16 text-right"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <TableRow key={idx}>
+                <TableCell className="px-3">
+                  <Skeleton className="size-4" />
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-16" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-32" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-24" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-20" />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Skeleton className="size-6 ml-auto" />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
+
+  if (!hasSearched) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+        <Search className="size-10 text-muted-foreground/60 mb-3" />
+        <h3 className="text-base font-medium">Ready to search leads</h3>
+        <p className="text-xs text-muted-foreground max-w-sm mt-1">
+          Choose a category, state, or enter a business keyword above, then click &quot;Find Leads&quot; to fetch live data.
+        </p>
+      </div>
+    );
+  }
 
   if (leads.length === 0) {
     return (

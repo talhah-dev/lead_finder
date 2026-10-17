@@ -11,6 +11,7 @@ import {
   Copy,
   Check,
   Building,
+  Search,
 } from "lucide-react";
 import {
   Card,
@@ -22,15 +23,23 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Lead } from "@/types/lead";
 import { toast } from "sonner";
 
 interface LeadCardsProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
+  isLoading?: boolean;
+  hasSearched?: boolean;
 }
 
-export function LeadCards({ leads, onLeadClick }: LeadCardsProps) {
+export function LeadCards({
+  leads,
+  onLeadClick,
+  isLoading = false,
+  hasSearched = false,
+}: LeadCardsProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const copyText = (text: string, label: string, key: string) => {
@@ -39,6 +48,48 @@ export function LeadCards({ leads, onLeadClick }: LeadCardsProps) {
     toast.success(`Copied ${label}`);
     setTimeout(() => setCopiedKey(null), 1800);
   };
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <Card key={idx} className="flex flex-col justify-between border p-4 space-y-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-3.5 w-36" />
+            </div>
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <div className="flex justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+            <div className="flex justify-between border-t pt-3">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-6 w-20" />
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (!hasSearched) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+        <Search className="size-10 text-muted-foreground/60 mb-3" />
+        <h3 className="text-base font-medium">Ready to search leads</h3>
+        <p className="text-xs text-muted-foreground max-w-sm mt-1">
+          Choose a category, state, or enter a business keyword above, then click &quot;Find Leads&quot; to fetch live data.
+        </p>
+      </div>
+    );
+  }
 
   if (leads.length === 0) {
     return (
