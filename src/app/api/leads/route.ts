@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query") || "";
-    const state = searchParams.get("state") || "California";
+    const state = searchParams.get("state") || "All States";
     const category = searchParams.get("category") || "All Categories";
     const provider = (searchParams.get("provider") as "osm" | "serpapi") || "osm";
     const limit = Number(searchParams.get("limit")) || 20;

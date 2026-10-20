@@ -22,11 +22,13 @@ import { toast } from "sonner";
 
 const INITIAL_FILTERS: LeadFilters = {
   query: "",
-  state: "California",
+  state: "All States",
   hasEmailOnly: false,
   hasPhoneOnly: false,
   hasWebsiteOnly: false,
   minRating: 0,
+  maxRating: 5,
+  ratingRange: "all",
   category: "All Categories",
   provider: "osm",
   limit: 20,
@@ -81,6 +83,14 @@ export default function Home() {
       }
 
       if (filters.minRating > 0 && lead.rating < filters.minRating) {
+        return false;
+      }
+
+      if (
+        filters.maxRating !== undefined &&
+        filters.maxRating < 5 &&
+        lead.rating > filters.maxRating
+      ) {
         return false;
       }
 

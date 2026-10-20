@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { US_STATES, CATEGORIES } from "@/data/mockLeads";
+import { StateCombobox } from "@/components/state-combobox";
+import { CategoryCombobox } from "@/components/category-combobox";
+import { RatingSelect } from "@/components/rating-select";
 import { LeadFilters } from "@/types/lead";
 
 interface SearchFiltersProps {
@@ -88,43 +90,17 @@ export function SearchFilters({
           </div>
 
           <div className="lg:col-span-2">
-            <Select
+            <StateCombobox
               value={filters.state}
-              onValueChange={(val) => {
-                if (val) onFilterChange({ state: val });
-              }}
-            >
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="State" />
-              </SelectTrigger>
-              <SelectContent className="min-w-48">
-                {US_STATES.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {state}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(val) => onFilterChange({ state: val })}
+            />
           </div>
 
           <div className="lg:col-span-2">
-            <Select
+            <CategoryCombobox
               value={filters.category}
-              onValueChange={(val) => {
-                if (val) onFilterChange({ category: val });
-              }}
-            >
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent className="min-w-56">
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(val) => onFilterChange({ category: val })}
+            />
           </div>
 
           <div className="lg:col-span-2">
@@ -227,15 +203,22 @@ export function SearchFilters({
               <span>Has Website</span>
             </label>
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <Checkbox
-                checked={filters.minRating >= 4.5}
-                onCheckedChange={(checked) =>
-                  onFilterChange({ minRating: checked ? 4.5 : 0 })
-                }
-              />
-              <span>Rating 4.5+ ★</span>
-            </label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground font-medium">Rating:</span>
+              <div className="w-48 sm:w-52">
+                <RatingSelect
+                  value={filters.ratingRange || "all"}
+                  onSelectRange={(opt) =>
+                    onFilterChange({
+                      ratingRange: opt.id,
+                      minRating: opt.min,
+                      maxRating: opt.max,
+                    })
+                  }
+                  className="w-full h-8 text-xs"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

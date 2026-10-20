@@ -39,6 +39,8 @@ export interface LeadFilters {
   hasPhoneOnly: boolean;
   hasWebsiteOnly: boolean;
   minRating: number;
+  maxRating?: number;
+  ratingRange?: string;
   category: string;
   provider?: "osm" | "serpapi";
   limit?: number;
