@@ -31,7 +31,7 @@ const INITIAL_FILTERS: LeadFilters = {
   maxRating: 5,
   ratingRange: "all",
   category: "All Categories",
-  provider: "osm",
+  provider: "serpapi",
   limit: 20,
 };
 

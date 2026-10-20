@@ -362,7 +362,7 @@ export async function searchWithOverpass(params: {
 (
   ${clauses.join("\n  ")}
 );
-out 25;
+out ${params.limit || 25};
   `;
 
   try {
@@ -384,7 +384,7 @@ out 25;
       const data = await res.json();
       if (Array.isArray(data.elements) && data.elements.length > 0) {
         const leads: Lead[] = await Promise.all(
-          data.slice(0, 50).map(async (el: { id: string | number; tags?: Record<string, string> }) => {
+          data.slice(0, params.limit || 50).map(async (el: { id: string | number; tags?: Record<string, string> }) => {
             const t = el.tags || {};
             const name =
               t.name ||
@@ -471,10 +471,11 @@ export async function searchWithNominatim(params: {
     ? `${stateKey}, ${countryName}`
     : countryName;
   const q = `${keyword} in ${locationQuery}`;
+  const queryLimit = params.limit ? Math.min(params.limit, 500) : 50;
   const isUS = countryName === "USA" || countryName === "United States";
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
     q
-  )}${isUS ? "&countrycodes=us" : ""}&format=json&extratags=1&addressdetails=1&limit=50`;
+  )}${isUS ? "&countrycodes=us" : ""}&format=json&extratags=1&addressdetails=1&limit=${queryLimit}`;
 
   try {
     const controller = new AbortController();
@@ -492,7 +493,7 @@ export async function searchWithNominatim(params: {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         const leads: Lead[] = await Promise.all(
-          data.slice(0, 50).map(async (item) => {
+          data.slice(0, params.limit || 50).map(async (item) => {
             const extra = item.extratags || {};
             const addr = item.address || {};
             const name =
@@ -580,7 +581,7 @@ async function searchWithSerpApi(params: {
   if (!apiKey || apiKey.trim().length < 5) return [];
 
   const targetCount = params.limit || 20;
-  const maxPages = 5;
+  const maxPages = Math.ceil(targetCount / 20);
 
   try {
     const isAllRegions =

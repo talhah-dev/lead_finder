@@ -151,18 +151,26 @@ export function SearchFilters({
   }, [activeCountry, subdivisionsData]);
 
   const dynamicCategories: CategoryOption[] = useMemo(() => {
-    if (categories.length === 0) return [];
+    const allOption: CategoryOption = {
+      id: "all",
+      label: "All Categories",
+      sector: "All Industries",
+    };
+    if (categories.length === 0) return [allOption];
     const filtered = categories.filter(
       (c) =>
         c.countryId === null ||
         (activeCountry?.code && c.countryId?.toUpperCase() === activeCountry.code.toUpperCase()) ||
         (activeCountry?.name && c.countryId?.toLowerCase() === activeCountry.name.toLowerCase())
     );
-    return filtered.map((c) => ({
-      id: c.id,
-      label: c.name,
-      sector: c.sector || "General",
-    }));
+    return [
+      allOption,
+      ...filtered.map((c) => ({
+        id: c.id,
+        label: c.name,
+        sector: c.sector || "General",
+      })),
+    ];
   }, [categories, activeCountry]);
 
   const handleCountryChange = (country: CountryOption) => {
@@ -178,7 +186,7 @@ export function SearchFilters({
     <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
-          <div className="relative sm:col-span-2 lg:col-span-3">
+          <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
@@ -193,7 +201,7 @@ export function SearchFilters({
             />
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="sm:col-span-1 lg:col-span-2">
             <CountryCombobox
               value={activeCountry?.name || "United States"}
               onValueChange={handleCountryChange}
@@ -202,7 +210,7 @@ export function SearchFilters({
             />
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="sm:col-span-1 lg:col-span-2">
             <StateCombobox
               value={filters.state}
               onValueChange={(val) => onFilterChange({ state: val })}
@@ -219,7 +227,7 @@ export function SearchFilters({
             />
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-2">
             <CategoryCombobox
               value={filters.category}
               onValueChange={(val) => onFilterChange({ category: val })}
@@ -227,9 +235,9 @@ export function SearchFilters({
             />
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="sm:col-span-1 lg:col-span-1">
             <Select
-              value={filters.provider || "osm"}
+              value={filters.provider || "serpapi"}
               onValueChange={(val) => {
                 if (val) {
                   onFilterChange({ provider: val as "osm" | "serpapi" });
@@ -241,11 +249,47 @@ export function SearchFilters({
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="serpapi" className="text-xs">
+                  SerpApi
+                </SelectItem>
                 <SelectItem value="osm" className="text-xs">
                   OSM
                 </SelectItem>
-                <SelectItem value="serpapi" className="text-xs">
-                  SerpApi
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="sm:col-span-1 lg:col-span-1">
+            <Select
+              value={String(filters.limit || 20)}
+              onValueChange={(val) => {
+                if (val) onFilterChange({ limit: Number(val) });
+              }}
+            >
+              <SelectTrigger className="w-full h-10 px-2 text-xs">
+                <SelectValue placeholder="Count" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="20" className="text-xs">
+                  20 Leads
+                </SelectItem>
+                <SelectItem value="50" className="text-xs">
+                  50 Leads
+                </SelectItem>
+                <SelectItem value="100" className="text-xs">
+                  100 Leads
+                </SelectItem>
+                <SelectItem value="200" className="text-xs">
+                  200 Leads
+                </SelectItem>
+                <SelectItem value="300" className="text-xs">
+                  300 Leads
+                </SelectItem>
+                <SelectItem value="400" className="text-xs">
+                  400 Leads
+                </SelectItem>
+                <SelectItem value="500" className="text-xs">
+                  500 Leads
                 </SelectItem>
               </SelectContent>
             </Select>
