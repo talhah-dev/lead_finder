@@ -85,6 +85,7 @@ export function SearchFilters({
               onKeyDown={(e) => {
                 if (e.key === "Enter") onSearch();
               }}
+              onFocus={(e) => e.currentTarget.select()}
               className="pl-9 h-10 text-sm"
             />
           </div>

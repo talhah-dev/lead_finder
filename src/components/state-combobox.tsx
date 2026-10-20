@@ -38,6 +38,14 @@ export function StateCombobox({
     );
   }, [value]);
 
+  const handleSelectAll = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    target.select();
+    requestAnimationFrame(() => {
+      target.select();
+    });
+  };
+
   return (
     <Combobox
       items={US_STATES_DATA}
@@ -54,6 +62,8 @@ export function StateCombobox({
       <ComboboxInput
         placeholder={placeholder}
         className={className || "w-full h-10"}
+        onFocus={handleSelectAll}
+        onClick={handleSelectAll}
       />
       <ComboboxContent className="min-w-64 max-h-80">
         <ComboboxEmpty>No states found.</ComboboxEmpty>

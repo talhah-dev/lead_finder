@@ -33,10 +33,18 @@ export function CategoryCombobox({
   const selectedCategory = useMemo(() => {
     return (
       CATEGORIES_DATA.find(
-        (c) => c.label.toLowerCase() === (value || "").toLowerCase()
-      ) || null
+        (c) => c.label.toLowerCase() === (value || "All Categories").toLowerCase()
+      ) || CATEGORIES_DATA[0]
     );
   }, [value]);
+
+  const handleSelectAll = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    target.select();
+    requestAnimationFrame(() => {
+      target.select();
+    });
+  };
 
   return (
     <Combobox
@@ -54,6 +62,8 @@ export function CategoryCombobox({
       <ComboboxInput
         placeholder={placeholder}
         className={className || "w-full h-10"}
+        onFocus={handleSelectAll}
+        onClick={handleSelectAll}
       />
       <ComboboxContent className="min-w-64 max-h-80">
         <ComboboxEmpty>No categories found.</ComboboxEmpty>
