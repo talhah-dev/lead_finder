@@ -15,13 +15,20 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
-import { US_STATES_DATA, type USState } from "@/data/mockLeads";
+import { US_STATES_DATA } from "@/data/mockLeads";
+
+export interface RegionOption {
+  code: string;
+  label: string;
+  region?: string;
+}
 
 interface StateComboboxProps {
   value?: string;
   onValueChange: (state: string) => void;
   className?: string;
   placeholder?: string;
+  items?: RegionOption[];
 }
 
 export function StateCombobox({
@@ -29,14 +36,32 @@ export function StateCombobox({
   onValueChange,
   className,
   placeholder = "Search state...",
+  items,
 }: StateComboboxProps) {
+  const list = useMemo(() => {
+    if (items && items.length > 0) {
+      return items;
+    }
+    return US_STATES_DATA;
+  }, [items]);
+
   const selectedState = useMemo(() => {
-    return (
-      US_STATES_DATA.find(
-        (s) => s.label.toLowerCase() === (value || "All States").toLowerCase()
-      ) || US_STATES_DATA[0]
+    if (
+      !value ||
+      value.startsWith("All ") ||
+      value === "All States" ||
+      value === "All Regions" ||
+      value === "All Cities"
+    ) {
+      return list[0] ?? null;
+    }
+    const match = list.find(
+      (s) =>
+        s.label.toLowerCase() === value.toLowerCase() ||
+        s.code.toLowerCase() === value.toLowerCase()
     );
-  }, [value]);
+    return match ?? { code: "CUSTOM", label: value, region: "Custom" };
+  }, [value, list]);
 
   const handleSelectAll = (e: React.SyntheticEvent<HTMLInputElement>) => {
     const target = e.currentTarget;
@@ -48,16 +73,18 @@ export function StateCombobox({
 
   return (
     <Combobox
-      items={US_STATES_DATA}
+      items={list}
       value={selectedState}
-      onValueChange={(val: USState | null) => {
+      onValueChange={(val: RegionOption | null) => {
         if (val) {
           onValueChange(val.label);
         }
       }}
-      itemToStringValue={(state: USState) => state?.label ?? ""}
-      itemToStringLabel={(state: USState) => state?.label ?? ""}
-      isItemEqualToValue={(a: USState, b: USState) => a?.code === b?.code}
+      itemToStringValue={(state: RegionOption) => state?.label ?? ""}
+      itemToStringLabel={(state: RegionOption) => state?.label ?? ""}
+      isItemEqualToValue={(a: RegionOption, b: RegionOption) =>
+        a?.code === b?.code || a?.label === b?.label
+      }
     >
       <ComboboxInput
         placeholder={placeholder}
@@ -66,18 +93,23 @@ export function StateCombobox({
         onClick={handleSelectAll}
       />
       <ComboboxContent className="min-w-64 max-h-80">
-        <ComboboxEmpty>No states found.</ComboboxEmpty>
+        <ComboboxEmpty>No locations found.</ComboboxEmpty>
         <ComboboxList>
-          {(state: USState) => (
-            <ComboboxItem key={state.code} value={state}>
+          {(state: RegionOption) => (
+            <ComboboxItem
+              key={`${state.region || ""}-${state.code}-${state.label}`}
+              value={state}
+            >
               <Item size="xs" className="p-0">
                 <ItemContent>
                   <ItemTitle className="whitespace-nowrap">
                     {state.label}
                   </ItemTitle>
-                  <ItemDescription>
-                    {state.region} ({state.code})
-                  </ItemDescription>
+                  {state.region && (
+                    <ItemDescription>
+                      {state.region} {state.code ? `(${state.code})` : ""}
+                    </ItemDescription>
+                  )}
                 </ItemContent>
               </Item>
             </ComboboxItem>

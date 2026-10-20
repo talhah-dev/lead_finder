@@ -15,13 +15,20 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@/components/ui/item";
-import { CATEGORIES_DATA, type LeadCategory } from "@/data/mockLeads";
+import { CATEGORIES_DATA } from "@/data/mockLeads";
+
+export interface CategoryOption {
+  id: string;
+  label: string;
+  sector?: string;
+}
 
 interface CategoryComboboxProps {
   value?: string;
   onValueChange: (category: string) => void;
   className?: string;
   placeholder?: string;
+  items?: CategoryOption[];
 }
 
 export function CategoryCombobox({
@@ -29,14 +36,28 @@ export function CategoryCombobox({
   onValueChange,
   className,
   placeholder = "Search category...",
+  items,
 }: CategoryComboboxProps) {
+  const list = useMemo(() => {
+    if (items && items.length > 0) {
+      return items;
+    }
+    return CATEGORIES_DATA.map((c) => ({
+      id: c.id,
+      label: c.label,
+      sector: c.sector,
+    }));
+  }, [items]);
+
   const selectedCategory = useMemo(() => {
-    return (
-      CATEGORIES_DATA.find(
-        (c) => c.label.toLowerCase() === (value || "All Categories").toLowerCase()
-      ) || CATEGORIES_DATA[0]
+    if (!value || value === "All Categories") {
+      return list[0] ?? null;
+    }
+    const match = list.find(
+      (c) => c.label.toLowerCase() === value.toLowerCase()
     );
-  }, [value]);
+    return match ?? { id: "custom", label: value, sector: "Custom" };
+  }, [value, list]);
 
   const handleSelectAll = (e: React.SyntheticEvent<HTMLInputElement>) => {
     const target = e.currentTarget;
@@ -48,16 +69,18 @@ export function CategoryCombobox({
 
   return (
     <Combobox
-      items={CATEGORIES_DATA}
+      items={list}
       value={selectedCategory}
-      onValueChange={(val: LeadCategory | null) => {
+      onValueChange={(val: CategoryOption | null) => {
         if (val) {
           onValueChange(val.label);
         }
       }}
-      itemToStringValue={(cat: LeadCategory) => cat?.label ?? ""}
-      itemToStringLabel={(cat: LeadCategory) => cat?.label ?? ""}
-      isItemEqualToValue={(a: LeadCategory, b: LeadCategory) => a?.id === b?.id}
+      itemToStringValue={(cat: CategoryOption) => cat?.label ?? ""}
+      itemToStringLabel={(cat: CategoryOption) => cat?.label ?? ""}
+      isItemEqualToValue={(a: CategoryOption, b: CategoryOption) =>
+        a?.id === b?.id || a?.label === b?.label
+      }
     >
       <ComboboxInput
         placeholder={placeholder}
@@ -68,16 +91,16 @@ export function CategoryCombobox({
       <ComboboxContent className="min-w-64 max-h-80">
         <ComboboxEmpty>No categories found.</ComboboxEmpty>
         <ComboboxList>
-          {(cat: LeadCategory) => (
+          {(cat: CategoryOption) => (
             <ComboboxItem key={cat.id} value={cat}>
               <Item size="xs" className="p-0">
                 <ItemContent>
                   <ItemTitle className="whitespace-nowrap">
                     {cat.label}
                   </ItemTitle>
-                  <ItemDescription>
-                    {cat.sector}
-                  </ItemDescription>
+                  {cat.sector && (
+                    <ItemDescription>{cat.sector}</ItemDescription>
+                  )}
                 </ItemContent>
               </Item>
             </ComboboxItem>

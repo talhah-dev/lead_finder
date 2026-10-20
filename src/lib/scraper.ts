@@ -1,4 +1,5 @@
 import { Lead, EmailStatus } from "@/types/lead";
+import { ExistingLeadIdentifiers, isLeadDuplicate } from "@/lib/db";
 
 const STATE_METROS: Record<string, [number, number][]> = {
   Alabama: [
@@ -336,6 +337,8 @@ export async function searchWithOverpass(params: {
   query: string;
   state: string;
   category: string;
+  limit?: number;
+  existingLeads?: ExistingLeadIdentifiers;
 }): Promise<Lead[]> {
   const stateKey = params.state && params.state !== "All States" ? params.state : "California";
   const metros = STATE_METROS[stateKey] || STATE_METROS["California"];
@@ -371,7 +374,7 @@ out 25;
       signal: controller.signal,
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "MapScoutLeadFinder/1.0 (contact@talhah.dev)",
+        "User-Agent": "GetLeadFinder/1.0 (contact@talhah.dev)",
       },
       body: `data=${encodeURIComponent(query)}`,
     });
@@ -431,7 +434,11 @@ out 25;
           })
         );
 
-        if (leads.length > 0) return leads;
+        const freshLeads = params.existingLeads
+          ? leads.filter((l) => !isLeadDuplicate(l, params.existingLeads!))
+          : leads;
+
+        if (freshLeads.length > 0) return freshLeads;
       }
     }
   } catch {}
@@ -441,19 +448,33 @@ out 25;
 
 export async function searchWithNominatim(params: {
   query: string;
+  country?: string;
   state: string;
   category: string;
+  limit?: number;
+  existingLeads?: ExistingLeadIdentifiers;
 }): Promise<Lead[]> {
-  const stateKey = params.state && params.state !== "All States" ? params.state : "";
+  const isAll =
+    !params.state ||
+    params.state.startsWith("All ") ||
+    params.state === "All States" ||
+    params.state === "All Cities" ||
+    params.state === "All Regions";
+  const stateKey = isAll ? "" : params.state;
+  const countryName = params.country || "USA";
   const keyword =
     params.query.trim() ||
     CATEGORY_SEARCH_TERMS[params.category] ||
     (params.category !== "All Categories" ? params.category : "business");
 
-  const q = stateKey ? `${keyword} ${stateKey}` : `${keyword} USA`;
+  const locationQuery = stateKey
+    ? `${stateKey}, ${countryName}`
+    : countryName;
+  const q = `${keyword} in ${locationQuery}`;
+  const isUS = countryName === "USA" || countryName === "United States";
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
     q
-  )}&countrycodes=us&format=json&extratags=1&addressdetails=1&limit=50`;
+  )}${isUS ? "&countrycodes=us" : ""}&format=json&extratags=1&addressdetails=1&limit=50`;
 
   try {
     const controller = new AbortController();
@@ -462,7 +483,7 @@ export async function searchWithNominatim(params: {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "MapScoutLeadFinder/1.0 (contact@talhah.dev)",
+        "User-Agent": "GetLeadFinder/1.0 (contact@talhah.dev)",
       },
     });
     clearTimeout(timeoutId);
@@ -522,7 +543,11 @@ export async function searchWithNominatim(params: {
           })
         );
 
-        return leads;
+        const freshLeads = params.existingLeads
+          ? leads.filter((l) => !isLeadDuplicate(l, params.existingLeads!))
+          : leads;
+
+        return freshLeads;
       }
     }
   } catch {}
@@ -545,25 +570,35 @@ interface SerpApiLocalResult {
 
 async function searchWithSerpApi(params: {
   query: string;
+  country?: string;
   state: string;
   category: string;
   limit?: number;
+  existingLeads?: ExistingLeadIdentifiers;
 }): Promise<Lead[]> {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey || apiKey.trim().length < 5) return [];
 
   const targetCount = params.limit || 20;
-  const numPages = Math.min(Math.ceil(targetCount / 20), 5);
+  const maxPages = 5;
 
   try {
-    const stateSuffix =
-      params.state && params.state !== "All States"
-        ? `in ${params.state}, USA`
-        : "in USA";
-    const searchTerm = `${params.query || params.category} ${stateSuffix}`;
-    const allItems: SerpApiLocalResult[] = [];
+    const isAllRegions =
+      !params.state ||
+      params.state === "All States" ||
+      params.state === "All Cities" ||
+      params.state === "All Provinces" ||
+      params.state === "All Regions";
 
-    for (let page = 0; page < numPages; page++) {
+    const countryName = params.country || "USA";
+    const locationPart = isAllRegions
+      ? `in ${countryName}`
+      : `in ${params.state}, ${countryName}`;
+
+    const searchTerm = `${params.query || params.category} ${locationPart}`;
+    const freshItems: SerpApiLocalResult[] = [];
+
+    for (let page = 0; page < maxPages && freshItems.length < targetCount; page++) {
       const start = page * 20;
       const url = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
         searchTerm
@@ -574,15 +609,29 @@ async function searchWithSerpApi(params: {
       const data = await res.json();
 
       if (data.local_results && Array.isArray(data.local_results)) {
-        allItems.push(...(data.local_results as SerpApiLocalResult[]));
+        for (const item of data.local_results as SerpApiLocalResult[]) {
+          const placeId = (item.place_id || "").trim();
+          const phone = (item.phone || "").replace(/\D/g, "");
+          const name = (item.title || "").toLowerCase().trim();
+
+          if (params.existingLeads) {
+            if (placeId && params.existingLeads.placeIds.has(placeId)) continue;
+            if (phone.length >= 7 && params.existingLeads.phones.has(phone)) continue;
+            if (name && params.existingLeads.names.has(name)) continue;
+          }
+
+          freshItems.push(item);
+          if (freshItems.length >= targetCount) break;
+        }
+
         if (data.local_results.length < 20) break;
       } else {
         break;
       }
     }
 
-    if (allItems.length > 0) {
-      const itemsToProcess = allItems.slice(0, targetCount);
+    if (freshItems.length > 0) {
+      const itemsToProcess = freshItems.slice(0, targetCount);
       const leads: Lead[] = await Promise.all(
         itemsToProcess.map(async (item: SerpApiLocalResult) => {
           let email: string | null = null;
@@ -599,7 +648,9 @@ async function searchWithSerpApi(params: {
           const city =
             addressParts.length > 1
               ? addressParts[addressParts.length - 2].trim()
-              : params.state || "California";
+              : params.state && !isAllRegions
+              ? params.state
+              : countryName;
 
           return {
             id: `serp-${item.place_id || Math.random().toString(36).slice(2, 9)}`,
@@ -614,7 +665,7 @@ async function searchWithSerpApi(params: {
             website,
             address: item.address || "",
             city,
-            state: params.state || "California",
+            state: params.state || countryName,
             zip: "",
             rating: Number(item.rating) || 4.5,
             reviewCount: Number(item.reviews) || 10,
@@ -642,10 +693,12 @@ async function searchWithSerpApi(params: {
 
 export async function searchGoogleMapsLeads(params: {
   query: string;
+  country?: string;
   state: string;
   category: string;
   provider?: "osm" | "serpapi";
   limit?: number;
+  existingLeads?: ExistingLeadIdentifiers;
 }): Promise<Lead[]> {
   const provider = params.provider || "osm";
 
@@ -653,5 +706,10 @@ export async function searchGoogleMapsLeads(params: {
     return await searchWithSerpApi(params);
   }
 
-  return await searchWithOverpass(params);
+  const isUS = !params.country || params.country === "United States" || params.country === "USA";
+  if (isUS && STATE_METROS[params.state]) {
+    return await searchWithOverpass(params);
+  }
+
+  return await searchWithNominatim(params);
 }

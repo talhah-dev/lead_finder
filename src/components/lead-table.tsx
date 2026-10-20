@@ -9,6 +9,7 @@ import {
   Eye,
   Building,
   Search,
+  Trash2,
 } from "lucide-react";
 import {
   Table,
@@ -31,6 +32,7 @@ interface LeadTableProps {
   onSelectChange: (ids: string[]) => void;
   onLeadClick: (lead: Lead) => void;
   onExportSelected: () => void;
+  onRemoveLead?: (lead: Lead) => void;
   isLoading?: boolean;
   hasSearched?: boolean;
 }
@@ -41,6 +43,7 @@ export function LeadTable({
   onSelectChange,
   onLeadClick,
   onExportSelected,
+  onRemoveLead,
   isLoading = false,
   hasSearched = false,
 }: LeadTableProps) {
@@ -367,17 +370,34 @@ export function LeadTable({
                   </TableCell>
 
                   <TableCell className="text-right">
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onLeadClick(lead);
-                      }}
-                      className="size-7 text-muted-foreground hover:text-foreground"
-                    >
-                      <Eye className="size-3.5" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLeadClick(lead);
+                        }}
+                        className="size-7 text-muted-foreground hover:text-foreground"
+                        title="View details"
+                      >
+                        <Eye className="size-3.5" />
+                      </Button>
+                      {onRemoveLead && (
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveLead(lead);
+                          }}
+                          className="size-7 text-muted-foreground hover:text-destructive"
+                          title="Remove & permanently exclude lead"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );

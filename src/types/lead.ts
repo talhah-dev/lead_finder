@@ -34,6 +34,7 @@ export interface Lead {
 
 export interface LeadFilters {
   query: string;
+  country?: string;
   state: string;
   hasEmailOnly: boolean;
   hasPhoneOnly: boolean;
