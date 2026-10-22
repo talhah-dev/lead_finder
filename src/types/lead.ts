@@ -43,11 +43,14 @@ export interface Lead {
 
 export interface LeadFilters {
   query: string;
+  country?: string;
   state: string;
   hasEmailOnly: boolean;
   hasPhoneOnly: boolean;
   hasWebsiteOnly: boolean;
   minRating: number;
+  maxRating?: number;
+  ratingRange?: string;
   category: string;
   provider?: "osm" | "serpapi";
   limit?: number;

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/lib/auth-context";
+import { QueryProvider } from "@/components/query-provider";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -17,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MapScout - Google Maps Lead Finder & Enrichment",
+  title: "GetLead - Google Maps Lead Finder & Enrichment",
   description: "Extract and enrich business leads, phones, emails, and websites directly from Google Maps.",
 };
 
@@ -39,8 +41,12 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {children}
-        <Toaster position="bottom-right" />
+        <QueryProvider>
+          <AuthProvider>
+            {children}
+            <Toaster position="bottom-right" />
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

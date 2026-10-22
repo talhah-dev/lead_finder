@@ -1,39 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchGoogleMapsLeads } from "@/lib/scraper";
-import { saveSearchAndLeads, updateLeadStatus } from "@/lib/db";
+import {
+  saveSearchAndLeads,
+  getExistingLeadIdentifiers,
+  isLeadDuplicate,
+  permanentlyRemoveLead,
+  updateLeadStatus,
+} from "@/lib/db";
 import { LeadStatus } from "@/types/lead";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query") || "";
-    const state = searchParams.get("state") || "California";
+    const country = searchParams.get("country") || "United States";
+    const state = searchParams.get("state") || "All States";
     const category = searchParams.get("category") || "All Categories";
     const provider = (searchParams.get("provider") as "osm" | "serpapi") || "osm";
     const limit = Number(searchParams.get("limit")) || 20;
 
-    const leads = await searchGoogleMapsLeads({ query, state, category, provider, limit });
+    const existing = await getExistingLeadIdentifiers();
+
+    const rawLeads = await searchGoogleMapsLeads({
+      query,
+      country,
+      state,
+      category,
+      provider,
+      limit,
+      existingLeads: existing,
+    });
+
+    const freshLeads = rawLeads.filter((l) => !isLeadDuplicate(l, existing));
+    const excludedCount = rawLeads.length - freshLeads.length;
 
     const searchId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-    try {
-      await saveSearchAndLeads(
-        {
-          id: searchId,
-          query,
-          state,
-          category,
-          totalFound: leads.length,
-        },
-        leads
-      );
-    } catch {}
+    if (freshLeads.length > 0) {
+      try {
+        await saveSearchAndLeads(
+          {
+            id: searchId,
+            query,
+            state,
+            category,
+            totalFound: freshLeads.length,
+          },
+          freshLeads
+        );
+      } catch {}
+    }
 
     return NextResponse.json({
       success: true,
       searchId,
-      total: leads.length,
-      leads,
+      total: freshLeads.length,
+      leads: freshLeads,
+      excludedDuplicates: excludedCount,
     });
   } catch (error: unknown) {
     return NextResponse.json(
@@ -86,6 +109,36 @@ export async function PATCH(request: NextRequest) {
   } catch (error: unknown) {
     return NextResponse.json(
       { success: false, error: (error as Error).message || "Failed to update lead status" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, placeId, phone, website, name } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: "Lead id is required" },
+        { status: 400 }
+      );
+    }
+
+    await permanentlyRemoveLead({
+      id,
+      placeId,
+      phone,
+      website,
+      name: name || "Removed Lead",
+      reason: "user_deleted",
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { success: false, error: (error as Error).message || "Failed to remove lead" },
       { status: 500 }
     );
   }

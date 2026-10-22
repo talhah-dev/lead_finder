@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, RotateCcw, Filter, Zap, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { US_STATES, CATEGORIES } from "@/data/mockLeads";
+import { StateCombobox, RegionOption } from "@/components/state-combobox";
+import { CategoryCombobox, CategoryOption } from "@/components/category-combobox";
+import { CountryCombobox, CountryOption } from "@/components/country-combobox";
+import { RatingSelect } from "@/components/rating-select";
 import { LeadFilters } from "@/types/lead";
+import { WorldCountry } from "@/types/admin";
 
 interface SearchFiltersProps {
   filters: LeadFilters;
@@ -31,6 +36,13 @@ interface SerpApiCredits {
   planName: string;
 }
 
+interface LoadedCategory {
+  id: string;
+  name: string;
+  countryId: string | null;
+  sector: string;
+}
+
 export function SearchFilters({
   filters,
   onFilterChange,
@@ -38,42 +50,143 @@ export function SearchFilters({
   onSearch,
   isSearching,
 }: SearchFiltersProps) {
-  const [credits, setCredits] = useState<SerpApiCredits | null>(null);
-
-  const fetchCredits = useCallback(async () => {
-    try {
+  const { data: creditsData, refetch: refetchCredits } = useQuery({
+    queryKey: ["credits"],
+    queryFn: async () => {
       const res = await fetch("/api/credits");
-      const data = await res.json();
-      if (data.success) {
-        setCredits(data);
-      }
-    } catch {}
-  }, []);
+      const json = await res.json();
+      return json.success ? (json as SerpApiCredits) : null;
+    },
+    enabled: filters.provider === "serpapi",
+  });
 
-  useEffect(() => {
-    let ignore = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/credits");
-        const data = await res.json();
-        if (!ignore && data.success) {
-          setCredits(data);
-        }
-      } catch {}
+  const { data: countriesData } = useQuery({
+    queryKey: ["admin", "world-countries"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/world-data?type=countries");
+      const json = await res.json();
+      return (json.countries || []) as WorldCountry[];
+    },
+  });
+
+  const { data: catData } = useQuery({
+    queryKey: ["admin", "categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/categories");
+      const json = await res.json();
+      return (json.categories || []) as LoadedCategory[];
+    },
+  });
+
+  const credits = creditsData || null;
+  const rawCountries = countriesData as unknown;
+  const countries: WorldCountry[] = Array.isArray(rawCountries)
+    ? (rawCountries as WorldCountry[])
+    : typeof rawCountries === "object" && rawCountries !== null && "countries" in rawCountries
+      ? (((rawCountries as { countries: unknown }).countries || []) as WorldCountry[])
+      : [];
+
+  const categories = catData || [];
+
+  const fetchCredits = useCallback(() => {
+    refetchCredits();
+  }, [refetchCredits]);
+
+  const activeCountry = useMemo(() => {
+    if (!filters.country) {
+      return countries.find((c) => c.code === "US") || countries[0];
     }
+    return (
+      countries.find(
+        (c) =>
+          c.name.toLowerCase() === filters.country?.toLowerCase() ||
+          c.code.toLowerCase() === filters.country?.toLowerCase()
+      ) || countries[0]
+    );
+  }, [countries, filters.country]);
 
-    load();
+  const { data: subdivisionsData } = useQuery({
+    queryKey: ["subdivisions", activeCountry?.code],
+    queryFn: async () => {
+      if (!activeCountry?.code) return { states: [], cities: [] };
+      const res = await fetch(
+        `/api/admin/world-data?type=subdivisions&countryCode=${activeCountry.code}`
+      );
+      const json = await res.json();
+      return {
+        states: (json.states || []) as { name: string; code: string }[],
+        cities: (json.cities || []) as { name: string; stateCode?: string }[],
+      };
+    },
+    enabled: !!activeCountry?.code,
+  });
 
-    return () => {
-      ignore = true;
+  const dynamicRegions: RegionOption[] = useMemo(() => {
+    if (!activeCountry) return [];
+
+    const isUS = activeCountry.code === "US";
+    const allLabel = isUS ? "All States" : `All ${activeCountry.name}`;
+    const allOption: RegionOption = {
+      code: "ALL",
+      label: allLabel,
+      region: "Entire Country",
     };
-  }, [filters.provider, isSearching]);
+
+    const states = subdivisionsData?.states || [];
+    const cities = subdivisionsData?.cities || [];
+
+    const stateOptions: RegionOption[] = states.map((s) => ({
+      code: s.code,
+      label: s.name,
+      region: "State / Province",
+    }));
+
+    const cityOptions: RegionOption[] = cities.map((c) => ({
+      code: c.stateCode || "",
+      label: c.name,
+      region: "City",
+    }));
+
+    return [allOption, ...stateOptions, ...cityOptions];
+  }, [activeCountry, subdivisionsData]);
+
+  const dynamicCategories: CategoryOption[] = useMemo(() => {
+    const allOption: CategoryOption = {
+      id: "all",
+      label: "All Categories",
+      sector: "All Industries",
+    };
+    if (categories.length === 0) return [allOption];
+    const filtered = categories.filter(
+      (c) =>
+        c.countryId === null ||
+        (activeCountry?.code && c.countryId?.toUpperCase() === activeCountry.code.toUpperCase()) ||
+        (activeCountry?.name && c.countryId?.toLowerCase() === activeCountry.name.toLowerCase())
+    );
+    return [
+      allOption,
+      ...filtered.map((c) => ({
+        id: c.id,
+        label: c.name,
+        sector: c.sector || "General",
+      })),
+    ];
+  }, [categories, activeCountry]);
+
+  const handleCountryChange = (country: CountryOption) => {
+    const isUS = country.code === "US";
+    const defaultRegion = isUS ? "All States" : `All ${country.name}`;
+    onFilterChange({
+      country: country.name,
+      state: defaultRegion,
+    });
+  };
 
   return (
     <div className="rounded-xl border bg-card p-4 sm:p-5 shadow-xs">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
-          <div className="relative sm:col-span-2 lg:col-span-3">
+          <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
@@ -83,53 +196,48 @@ export function SearchFilters({
               onKeyDown={(e) => {
                 if (e.key === "Enter") onSearch();
               }}
+              onFocus={(e) => e.currentTarget.select()}
               className="pl-9 h-10 text-sm"
             />
           </div>
 
-          <div className="lg:col-span-2">
-            <Select
+          <div className="sm:col-span-1 lg:col-span-2">
+            <CountryCombobox
+              value={activeCountry?.name || "United States"}
+              onValueChange={handleCountryChange}
+              items={countries.length > 0 ? countries : undefined}
+              placeholder="Search country..."
+            />
+          </div>
+
+          <div className="sm:col-span-1 lg:col-span-2">
+            <StateCombobox
               value={filters.state}
-              onValueChange={(val) => {
-                if (val) onFilterChange({ state: val });
-              }}
-            >
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="State" />
-              </SelectTrigger>
-              <SelectContent className="min-w-48">
-                {US_STATES.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {state}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(val) => onFilterChange({ state: val })}
+              items={dynamicRegions.length > 0 ? dynamicRegions : undefined}
+              placeholder={
+                activeCountry?.name === "Pakistan"
+                  ? "Search city or province..."
+                  : activeCountry?.name === "Canada"
+                  ? "Search province or city..."
+                  : activeCountry?.name === "United States"
+                  ? "Search state or city..."
+                  : `Search in ${activeCountry?.name || "country"}...`
+              }
+            />
           </div>
 
-          <div className="lg:col-span-2">
-            <Select
+          <div className="sm:col-span-2 lg:col-span-2">
+            <CategoryCombobox
               value={filters.category}
-              onValueChange={(val) => {
-                if (val) onFilterChange({ category: val });
-              }}
-            >
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent className="min-w-56">
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(val) => onFilterChange({ category: val })}
+              items={dynamicCategories.length > 0 ? dynamicCategories : undefined}
+            />
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="sm:col-span-1 lg:col-span-1">
             <Select
-              value={filters.provider || "osm"}
+              value={filters.provider || "serpapi"}
               onValueChange={(val) => {
                 if (val) {
                   onFilterChange({ provider: val as "osm" | "serpapi" });
@@ -137,34 +245,52 @@ export function SearchFilters({
                 }
               }}
             >
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="Provider" />
+              <SelectTrigger className="w-full h-10 px-2 text-xs">
+                <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="osm">
-                  OpenStreetMap (Free)
+                <SelectItem value="serpapi" className="text-xs">
+                  SerpApi
                 </SelectItem>
-                <SelectItem value="serpapi">
-                  SerpApi (Google Maps)
+                <SelectItem value="osm" className="text-xs">
+                  OSM
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="sm:col-span-1 lg:col-span-1">
             <Select
               value={String(filters.limit || 20)}
               onValueChange={(val) => {
                 if (val) onFilterChange({ limit: Number(val) });
               }}
             >
-              <SelectTrigger className="w-full h-10 px-2.5 text-xs">
+              <SelectTrigger className="w-full h-10 px-2 text-xs">
                 <SelectValue placeholder="Count" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="20">20 Leads</SelectItem>
-                <SelectItem value="50">50 Leads</SelectItem>
-                <SelectItem value="100">100 Leads</SelectItem>
+                <SelectItem value="20" className="text-xs">
+                  20 Leads
+                </SelectItem>
+                <SelectItem value="50" className="text-xs">
+                  50 Leads
+                </SelectItem>
+                <SelectItem value="100" className="text-xs">
+                  100 Leads
+                </SelectItem>
+                <SelectItem value="200" className="text-xs">
+                  200 Leads
+                </SelectItem>
+                <SelectItem value="300" className="text-xs">
+                  300 Leads
+                </SelectItem>
+                <SelectItem value="400" className="text-xs">
+                  400 Leads
+                </SelectItem>
+                <SelectItem value="500" className="text-xs">
+                  500 Leads
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -227,15 +353,22 @@ export function SearchFilters({
               <span>Has Website</span>
             </label>
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <Checkbox
-                checked={filters.minRating >= 4.5}
-                onCheckedChange={(checked) =>
-                  onFilterChange({ minRating: checked ? 4.5 : 0 })
-                }
-              />
-              <span>Rating 4.5+ ★</span>
-            </label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground font-medium">Rating:</span>
+              <div className="w-48 sm:w-52">
+                <RatingSelect
+                  value={filters.ratingRange || "all"}
+                  onSelectRange={(opt) =>
+                    onFilterChange({
+                      ratingRange: opt.id,
+                      minRating: opt.min,
+                      maxRating: opt.max,
+                    })
+                  }
+                  className="w-full h-8 text-xs"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

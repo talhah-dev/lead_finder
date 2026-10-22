@@ -2,9 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MapPin, Download, Layers, History, Search } from "lucide-react";
+import {
+  MapPin,
+  Download,
+  Layers,
+  History,
+  Search,
+  ShieldCheck,
+  LogOut,
+  User,
+} from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 interface NavbarProps {
@@ -14,6 +24,7 @@ interface NavbarProps {
 
 export function Navbar({ onExportClick, totalLeads = 0 }: NavbarProps) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur-md">
@@ -23,7 +34,7 @@ export function Navbar({ onExportClick, totalLeads = 0 }: NavbarProps) {
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <MapPin className="size-4" />
             </div>
-            <span className="font-semibold text-base tracking-tight">MapScout</span>
+            <span className="font-semibold text-base tracking-tight">GetLead</span>
           </Link>
 
           <nav className="flex items-center gap-1">
@@ -54,6 +65,22 @@ export function Navbar({ onExportClick, totalLeads = 0 }: NavbarProps) {
               <History className="size-3.5" />
               <span>History</span>
             </Link>
+
+            {user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className={cn(
+                  buttonVariants({
+                    variant: pathname.startsWith("/admin") ? "secondary" : "ghost",
+                    size: "sm",
+                  }),
+                  "h-8 text-xs gap-1.5 font-medium text-primary"
+                )}
+              >
+                <ShieldCheck className="size-3.5" />
+                <span>Admin Dashboard</span>
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -73,6 +100,26 @@ export function Navbar({ onExportClick, totalLeads = 0 }: NavbarProps) {
               <Download className="size-3.5" />
               <span>Export</span>
             </Button>
+          )}
+
+          {user && (
+            <div className="flex items-center gap-2 pl-2 border-l">
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-xs font-medium leading-none">{user.name}</span>
+                <span className="text-[10px] text-muted-foreground capitalize">
+                  {user.role}
+                </span>
+              </div>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={logout}
+                title="Sign out"
+                className="size-7 text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="size-3.5" />
+              </Button>
+            </div>
           )}
         </div>
       </div>

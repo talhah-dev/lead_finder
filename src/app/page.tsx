@@ -14,6 +14,7 @@ import { LeadTable } from "@/components/lead-table";
 import { LeadCards } from "@/components/lead-cards";
 import { LeadDetailSheet } from "@/components/lead-detail-sheet";
 import { ExportDialog } from "@/components/export-dialog";
+import { AccessGate } from "@/components/access-gate";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,13 +24,15 @@ import { deduplicateLeads } from "@/lib/deduplicate";
 
 const INITIAL_FILTERS: LeadFilters = {
   query: "",
-  state: "California",
+  state: "All States",
   hasEmailOnly: false,
   hasPhoneOnly: false,
   hasWebsiteOnly: false,
   minRating: 0,
+  maxRating: 5,
+  ratingRange: "all",
   category: "All Categories",
-  provider: "osm",
+  provider: "serpapi",
   limit: 20,
 };
 
@@ -46,8 +49,18 @@ export default function Home() {
 
   const filteredLeads = useMemo(() => {
     const matching = leads.filter((lead) => {
-      if (filters.state && filters.state !== "All States") {
-        if (lead.state.toLowerCase() !== filters.state.toLowerCase()) {
+      if (
+        filters.state &&
+        !filters.state.startsWith("All ") &&
+        filters.state !== "All States" &&
+        filters.state !== "All Regions" &&
+        filters.state !== "All Cities"
+      ) {
+        const s = filters.state.toLowerCase();
+        const matchesState = lead.state?.toLowerCase().includes(s);
+        const matchesCity = lead.city?.toLowerCase().includes(s);
+        const matchesAddress = lead.address?.toLowerCase().includes(s);
+        if (!matchesState && !matchesCity && !matchesAddress) {
           return false;
         }
       }
@@ -85,6 +98,14 @@ export default function Home() {
         return false;
       }
 
+      if (
+        filters.maxRating !== undefined &&
+        filters.maxRating < 5 &&
+        lead.rating > filters.maxRating
+      ) {
+        return false;
+      }
+
       return true;
     });
     return deduplicateLeads(matching);
@@ -111,6 +132,7 @@ export default function Home() {
     try {
       const params = new URLSearchParams({
         query: filters.query,
+        country: filters.country || "United States",
         state: filters.state,
         category: filters.category,
         provider: filters.provider || "osm",
@@ -125,10 +147,20 @@ export default function Home() {
         setLeads(unique);
         setSelectedIds([]);
         if (unique.length === 0) {
-          toast.info(`No leads found via ${providerName} for this criteria`);
+          if (data.excludedDuplicates && data.excludedDuplicates > 0) {
+            toast.info(
+              `All ${data.excludedDuplicates} found leads are already saved in your database`
+            );
+          } else {
+            toast.info(`No leads found via ${providerName} for this criteria`);
+          }
         } else {
+          const excludedNote =
+            data.excludedDuplicates && data.excludedDuplicates > 0
+              ? ` (${data.excludedDuplicates} previously saved excluded)`
+              : "";
           toast.success(
-            `Found ${unique.length} unique leads via ${providerName} and saved to database`
+            `Found ${unique.length} unique leads via ${providerName}${excludedNote}`
           );
         }
       } else {
@@ -155,12 +187,39 @@ export default function Home() {
     }
   };
 
+  const handleRemoveLead = async (lead: Lead) => {
+    try {
+      const res = await fetch("/api/leads", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: lead.id,
+          placeId: lead.placeId,
+          phone: lead.phone,
+          website: lead.website,
+          name: lead.name,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+        setSelectedIds((prev) => prev.filter((id) => id !== lead.id));
+        toast.success(`Removed "${lead.name}". It will never appear in future searches.`);
+      } else {
+        toast.error("Failed to remove lead");
+      }
+    } catch {
+      toast.error("Network error while removing lead");
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar
-        onExportClick={filteredLeads.length > 0 ? () => setIsExportOpen(true) : undefined}
-        totalLeads={filteredLeads.length}
-      />
+    <AccessGate>
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar
+          onExportClick={filteredLeads.length > 0 ? () => setIsExportOpen(true) : undefined}
+          totalLeads={filteredLeads.length}
+        />
 
       <main className="flex-1 container mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div className="flex flex-col gap-2">
@@ -244,6 +303,7 @@ export default function Home() {
               onLeadClick={handleOpenLead}
               onExportSelected={() => setIsExportOpen(true)}
               onStatusChange={handleStatusChange}
+              onRemoveLead={handleRemoveLead}
               isLoading={isSearching}
               hasSearched={hasSearched}
             />
@@ -273,5 +333,6 @@ export default function Home() {
         selectedIds={selectedIds}
       />
     </div>
+  </AccessGate>
   );
 }

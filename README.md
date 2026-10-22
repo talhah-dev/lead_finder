@@ -1,4 +1,4 @@
-# MapScout - Google Maps Lead Finder & Enrichment
+# GetLead - Google Maps Lead Finder & Enrichment
 
 A modern, high-performance web application designed to discover, extract, and enrich B2B business leads directly from Google Maps across any US state and industry. Every search is automatically persisted into a serverless **Neon PostgreSQL** database with one-click CSV/JSON export and historical search tracking.
 

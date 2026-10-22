@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   History,
   Trash2,
@@ -27,6 +28,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Lead, LeadStatus } from "@/types/lead";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -42,19 +45,62 @@ interface SearchHistoryItem {
 }
 
 export default function HistoryPage() {
-  const [historyItems, setHistoryItems] = useState<SearchHistoryItem[]>([]);
-  const [selectedSearch, setSelectedSearch] = useState<SearchHistoryItem | null>(null);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const queryClient = useQueryClient();
+  const [selectedSearchId, setSelectedSearchId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("table");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const {
+    data: historyData,
+    isLoading: isLoadingHistory,
+    isFetching: isFetchingHistory,
+    refetch: refetchHistory,
+  } = useQuery({
+    queryKey: ["search-history"],
+    queryFn: async () => {
+const res = await fetch("/api/history");
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to fetch history");
+      return (json.history || []) as SearchHistoryItem[];
+    },
+  });
+
+  const rawHistoryData = historyData as unknown;
+  const historyItems: SearchHistoryItem[] = Array.isArray(rawHistoryData)
+    ? (rawHistoryData as SearchHistoryItem[])
+    : typeof rawHistoryData === "object" && rawHistoryData !== null && "history" in rawHistoryData
+      ? (((rawHistoryData as { history: unknown }).history || []) as SearchHistoryItem[])
+      : [];
+
+  const selectedSearch =
+    historyItems.find((h) => h.id === selectedSearchId) ||
+    historyItems[0] ||
+    null;
+
+  const {
+    data: leadsData,
+    isLoading: isLoadingLeads,
+  } = useQuery({
+    queryKey: ["search-history-leads", selectedSearch?.id],
+    queryFn: async () => {
+      if (!selectedSearch?.id) return [] as Lead[];
+      const res = await fetch(`/api/history?searchId=${selectedSearch.id}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to fetch leads");
+      return (json.leads || []) as Lead[];
+    },
+    enabled: !!selectedSearch?.id,
+  });
+
+  const rawLeadsData = leadsData as unknown;
+  const leads: Lead[] = Array.isArray(rawLeadsData)
+    ? (rawLeadsData as Lead[])
+    : typeof rawLeadsData === "object" && rawLeadsData !== null && "leads" in rawLeadsData
+      ? (((rawLeadsData as { leads: unknown }).leads || []) as Lead[])
+      : [];
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -82,118 +128,47 @@ export default function HistoryPage() {
     return leads.filter((l) => (l.status || "New") === statusFilter);
   }, [leads, statusFilter]);
 
-  const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
+  const handleStatusChange = async (leadId: string, newStatus: LeadStatus) => {
+    queryClient.setQueryData(
+      ["search-history-leads", selectedSearch?.id],
+      (old: Lead[] | undefined) =>
+        (old || []).map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
     );
     if (activeLead && activeLead.id === leadId) {
       setActiveLead((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
+    try {
+      await fetch("/api/leads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, status: newStatus }),
+      });
+      toast.success(`Updated status to ${newStatus}`);
+    } catch {}
   };
 
-  const loadSearchLeads = useCallback(async (item: SearchHistoryItem) => {
-    setSelectedSearch(item);
-    setIsLoadingLeads(true);
-    setSelectedLeadIds([]);
-    setStatusFilter("ALL");
-    try {
-      const res = await fetch(`/api/history?searchId=${item.id}`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.leads)) {
-        setLeads(deduplicateLeads(data.leads));
-      }
-    } catch {
-      toast.error("Failed to load leads for this search");
-    } finally {
-      setIsLoadingLeads(false);
-    }
-  }, []);
-
-  const fetchHistory = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/history");
-      const data = await res.json();
-      if (data.success && Array.isArray(data.history)) {
-        setHistoryItems(data.history);
-        if (data.history.length > 0) {
-          loadSearchLeads(data.history[0]);
-        }
-      }
-    } catch {
-      toast.error("Failed to load search history");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [loadSearchLeads]);
-
-  const handleDeleteHistory = async (id?: string) => {
-    if (id) {
-      setDeletingId(id);
-    } else {
-      setIsDeletingAll(true);
-    }
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async (id?: string) => {
       const url = id ? `/api/history?searchId=${id}` : "/api/history";
       const res = await fetch(url, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(id ? "Search session removed" : "All history cleared");
-        if (id) {
-          setHistoryItems((prev) => prev.filter((i) => i.id !== id));
-          if (selectedSearch?.id === id) {
-            setSelectedSearch(null);
-            setLeads([]);
-          }
-        } else {
-          setHistoryItems([]);
-          setSelectedSearch(null);
-          setLeads([]);
-        }
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to delete history");
+      return { id };
+    },
+    onSuccess: (data) => {
+      toast.success(data.id ? "Search session removed" : "All history cleared");
+      queryClient.invalidateQueries({ queryKey: ["search-history"] });
+      queryClient.invalidateQueries({ queryKey: ["search-history-leads"] });
+      if (data.id && selectedSearchId === data.id) {
+        setSelectedSearchId(null);
+      } else if (!data.id) {
+        setSelectedSearchId(null);
       }
-    } catch {
-      toast.error("Failed to delete history");
-    } finally {
-      if (id) {
-        setDeletingId(null);
-      } else {
-        setIsDeletingAll(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    let ignore = false;
-
-    async function init() {
-      try {
-        const res = await fetch("/api/history");
-        const data = await res.json();
-        if (!ignore && data.success && Array.isArray(data.history)) {
-          setHistoryItems(data.history);
-          if (data.history.length > 0) {
-            const first = data.history[0];
-            setSelectedSearch(first);
-            const lRes = await fetch(`/api/history?searchId=${first.id}`);
-            const lData = await lRes.json();
-            if (!ignore && lData.success && Array.isArray(lData.leads)) {
-              setLeads(lData.leads);
-            }
-          }
-        }
-      } catch {
-        if (!ignore) toast.error("Failed to load search history");
-      } finally {
-        if (!ignore) setIsLoading(false);
-      }
-    }
-
-    init();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete history");
+    },
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -229,11 +204,15 @@ export default function HistoryPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={fetchHistory}
-              disabled={isLoading}
+              onClick={() => refetchHistory()}
+              disabled={isLoadingHistory}
               className="h-8 text-xs gap-1.5"
             >
-              <RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              {isFetchingHistory ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
               <span>Refresh</span>
             </Button>
 
@@ -241,13 +220,13 @@ export default function HistoryPage() {
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => handleDeleteHistory()}
-                disabled={isDeletingAll || Boolean(deletingId) || isLoading}
+                onClick={() => deleteMutation.mutate(undefined)}
+                disabled={deleteMutation.isPending || isLoadingHistory}
                 className="h-8 text-xs gap-1.5"
               >
-                {isDeletingAll ? (
+                {deleteMutation.isPending && !deleteMutation.variables ? (
                   <>
-                    <RefreshCw className="size-3.5 animate-spin" />
+                    <Spinner className="size-3.5" />
                     <span>Clearing...</span>
                   </>
                 ) : (
@@ -261,10 +240,20 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20">
-            <RefreshCw className="size-8 animate-spin text-muted-foreground/60 mb-2" />
-            <p className="text-xs text-muted-foreground">Loading Neon history...</p>
+        {isLoadingHistory ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-4 space-y-3">
+              <Skeleton className="h-4 w-32" />
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-xl" />
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-8 space-y-4">
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-96 w-full rounded-xl" />
+            </div>
           </div>
         ) : historyItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
@@ -297,7 +286,10 @@ export default function HistoryPage() {
                   return (
                     <Card
                       key={item.id}
-                      onClick={() => loadSearchLeads(item)}
+                      onClick={() => {
+                        setSelectedSearchId(item.id);
+                        setSelectedLeadIds([]);
+                      }}
                       className={`cursor-pointer transition-all border p-3 ${
                         isSelected
                           ? "ring-2 ring-primary border-transparent bg-muted/30"
@@ -333,14 +325,14 @@ export default function HistoryPage() {
                           size="icon-xs"
                           variant="ghost"
                           className="size-5 text-muted-foreground hover:text-destructive"
-                          disabled={deletingId === item.id || isDeletingAll}
+                          disabled={deleteMutation.isPending}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteHistory(item.id);
+                            deleteMutation.mutate(item.id);
                           }}
                         >
-                          {deletingId === item.id ? (
-                            <RefreshCw className="size-3 animate-spin" />
+                          {deleteMutation.isPending && deleteMutation.variables === item.id ? (
+                            <Spinner className="size-3" />
                           ) : (
                             <Trash2 className="size-3" />
                           )}
@@ -515,9 +507,11 @@ export default function HistoryPage() {
               )}
 
               {isLoadingLeads ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
-                  <RefreshCw className="size-6 animate-spin text-muted-foreground/60 mb-2" />
-                  <p className="text-xs text-muted-foreground">Loading leads from database...</p>
+<div className="space-y-3">
+                  <div className="flex items-center justify-center py-12 border rounded-xl gap-2 text-xs text-muted-foreground">
+                    <Spinner className="size-4" />
+                    <span>Loading leads from database...</span>
+                  </div>
                 </div>
               ) : displayedLeads.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
