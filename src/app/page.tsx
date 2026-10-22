@@ -17,8 +17,9 @@ import { ExportDialog } from "@/components/export-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Lead, LeadFilters } from "@/types/lead";
+import { Lead, LeadFilters, LeadStatus } from "@/types/lead";
 import { toast } from "sonner";
+import { deduplicateLeads } from "@/lib/deduplicate";
 
 const INITIAL_FILTERS: LeadFilters = {
   query: "",
@@ -44,7 +45,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("table");
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    const matching = leads.filter((lead) => {
       if (filters.state && filters.state !== "All States") {
         if (lead.state.toLowerCase() !== filters.state.toLowerCase()) {
           return false;
@@ -86,6 +87,7 @@ export default function Home() {
 
       return true;
     });
+    return deduplicateLeads(matching);
   }, [leads, filters]);
 
   const handleFilterChange = (updated: Partial<LeadFilters>) => {
@@ -119,13 +121,14 @@ export default function Home() {
       const data = await res.json();
 
       if (data.success && Array.isArray(data.leads)) {
-        setLeads(data.leads);
+        const unique = deduplicateLeads(data.leads);
+        setLeads(unique);
         setSelectedIds([]);
-        if (data.leads.length === 0) {
+        if (unique.length === 0) {
           toast.info(`No leads found via ${providerName} for this criteria`);
         } else {
           toast.success(
-            `Found ${data.leads.length} leads via ${providerName} and saved to database`
+            `Found ${unique.length} unique leads via ${providerName} and saved to database`
           );
         }
       } else {
@@ -141,6 +144,15 @@ export default function Home() {
   const handleOpenLead = (lead: Lead) => {
     setActiveLead(lead);
     setIsDetailOpen(true);
+  };
+
+  const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
+    );
+    if (activeLead && activeLead.id === leadId) {
+      setActiveLead((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
   };
 
   return (
@@ -231,6 +243,7 @@ export default function Home() {
               onSelectChange={setSelectedIds}
               onLeadClick={handleOpenLead}
               onExportSelected={() => setIsExportOpen(true)}
+              onStatusChange={handleStatusChange}
               isLoading={isSearching}
               hasSearched={hasSearched}
             />
@@ -238,6 +251,7 @@ export default function Home() {
             <LeadCards
               leads={filteredLeads}
               onLeadClick={handleOpenLead}
+              onStatusChange={handleStatusChange}
               isLoading={isSearching}
               hasSearched={hasSearched}
             />
@@ -249,6 +263,7 @@ export default function Home() {
         lead={activeLead}
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
+        onStatusChange={handleStatusChange}
       />
 
       <ExportDialog

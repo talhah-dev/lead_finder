@@ -1,4 +1,5 @@
 import { Lead, EmailStatus } from "@/types/lead";
+import { deduplicateLeads, normalizePhone } from "@/lib/deduplicate";
 
 const STATE_METROS: Record<string, [number, number][]> = {
   California: [
@@ -271,7 +272,7 @@ out 25;
           })
         );
 
-        if (leads.length > 0) return leads;
+        if (leads.length > 0) return deduplicateLeads(leads);
       }
     }
   } catch {}
@@ -362,7 +363,7 @@ export async function searchWithNominatim(params: {
           })
         );
 
-        return leads;
+        return deduplicateLeads(leads);
       }
     }
   } catch {}
@@ -393,13 +394,14 @@ async function searchWithSerpApi(params: {
   if (!apiKey || apiKey.trim().length < 5) return [];
 
   const targetCount = params.limit || 20;
-  const numPages = Math.min(Math.ceil(targetCount / 20), 5);
 
   try {
     const searchTerm = `${params.query || params.category} in ${params.state || "California"}, USA`;
+    const seenRawKeys = new Set<string>();
     const allItems: SerpApiLocalResult[] = [];
+    const maxPages = Math.min(Math.ceil(targetCount / 15) + 2, 7);
 
-    for (let page = 0; page < numPages; page++) {
+    for (let page = 0; page < maxPages && allItems.length < targetCount; page++) {
       const start = page * 20;
       const url = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(
         searchTerm
@@ -410,7 +412,21 @@ async function searchWithSerpApi(params: {
       const data = await res.json();
 
       if (data.local_results && Array.isArray(data.local_results)) {
-        allItems.push(...(data.local_results as SerpApiLocalResult[]));
+        for (const item of (data.local_results as SerpApiLocalResult[])) {
+          const rawPhone = item.phone ? normalizePhone(item.phone) : "";
+          const rawPlaceId = (item.place_id || "").trim();
+          const rawName = (item.title || "").toLowerCase().trim();
+
+          const key = rawPhone || rawPlaceId || rawName;
+          if (key && seenRawKeys.has(key)) {
+            continue;
+          }
+          if (key) seenRawKeys.add(key);
+
+          allItems.push(item);
+          if (allItems.length >= targetCount) break;
+        }
+
         if (data.local_results.length < 20) break;
       } else {
         break;
@@ -469,7 +485,7 @@ async function searchWithSerpApi(params: {
         })
       );
 
-      return leads;
+      return deduplicateLeads(leads);
     }
   } catch {}
 
@@ -484,10 +500,13 @@ export async function searchGoogleMapsLeads(params: {
   limit?: number;
 }): Promise<Lead[]> {
   const provider = params.provider || "osm";
+  let results: Lead[] = [];
 
   if (provider === "serpapi") {
-    return await searchWithSerpApi(params);
+    results = await searchWithSerpApi(params);
+  } else {
+    results = await searchWithOverpass(params);
   }
 
-  return await searchWithOverpass(params);
+  return deduplicateLeads(results);
 }

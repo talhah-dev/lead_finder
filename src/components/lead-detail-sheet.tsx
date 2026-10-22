@@ -23,19 +23,22 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Lead } from "@/types/lead";
+import { Lead, LeadStatus } from "@/types/lead";
+import { LeadStatusActions } from "@/components/lead-status-actions";
 import { toast } from "sonner";
 
 interface LeadDetailSheetProps {
   lead: Lead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
 }
 
 export function LeadDetailSheet({
   lead,
   open,
   onOpenChange,
+  onStatusChange,
 }: LeadDetailSheetProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -93,6 +96,13 @@ export function LeadDetailSheet({
               <span>•</span>
               <span className="text-emerald-600 font-medium">Verified Listing</span>
             </SheetDescription>
+            <div className="pt-3">
+              <LeadStatusActions
+                leadId={lead.id}
+                currentStatus={lead.status}
+                onStatusChange={onStatusChange}
+              />
+            </div>
           </SheetHeader>
         </div>
 

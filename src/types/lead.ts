@@ -1,6 +1,15 @@
 export type EmailStatus = "verified" | "unverified" | "not_found";
 
-export type LeadStatus = "New" | "Contacted" | "Qualified" | "Archived";
+export type LeadStatus =
+  | "New"
+  | "Approved"
+  | "Rejected"
+  | "Pending"
+  | "Follow Up"
+  | "Interested"
+  | "Contacted"
+  | "Qualified"
+  | "Archived";
 
 export interface Lead {
   id: string;

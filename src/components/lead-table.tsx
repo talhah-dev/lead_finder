@@ -22,7 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Lead } from "@/types/lead";
+import { Lead, LeadStatus } from "@/types/lead";
+import { LeadStatusActions } from "@/components/lead-status-actions";
 import { toast } from "sonner";
 
 interface LeadTableProps {
@@ -31,6 +32,7 @@ interface LeadTableProps {
   onSelectChange: (ids: string[]) => void;
   onLeadClick: (lead: Lead) => void;
   onExportSelected: () => void;
+  onStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
   isLoading?: boolean;
   hasSearched?: boolean;
 }
@@ -41,6 +43,7 @@ export function LeadTable({
   onSelectChange,
   onLeadClick,
   onExportSelected,
+  onStatusChange,
   isLoading = false,
   hasSearched = false,
 }: LeadTableProps) {
@@ -100,6 +103,7 @@ export function LeadTable({
               <TableHead className="min-w-[200px]">Enriched Email</TableHead>
               <TableHead className="min-w-[160px]">Website</TableHead>
               <TableHead className="min-w-[140px]">Location</TableHead>
+              <TableHead className="min-w-[180px]">Status</TableHead>
               <TableHead className="w-16 text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -129,6 +133,9 @@ export function LeadTable({
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-20" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-6 w-28" />
                 </TableCell>
                 <TableCell className="text-right">
                   <Skeleton className="size-6 ml-auto" />
@@ -220,6 +227,7 @@ export function LeadTable({
               <TableHead className="min-w-[200px]">Enriched Email</TableHead>
               <TableHead className="min-w-[160px]">Website</TableHead>
               <TableHead className="min-w-[140px]">Location</TableHead>
+              <TableHead className="min-w-[180px]">Status</TableHead>
               <TableHead className="w-16 text-right">Details</TableHead>
             </TableRow>
           </TableHeader>
@@ -364,6 +372,14 @@ export function LeadTable({
                     <span>
                       {lead.city}, {lead.state}
                     </span>
+                  </TableCell>
+
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <LeadStatusActions
+                      leadId={lead.id}
+                      currentStatus={lead.status}
+                      onStatusChange={onStatusChange}
+                    />
                   </TableCell>
 
                   <TableCell className="text-right">

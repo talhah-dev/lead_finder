@@ -24,12 +24,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Lead } from "@/types/lead";
+import { Lead, LeadStatus } from "@/types/lead";
+import { LeadStatusActions } from "@/components/lead-status-actions";
 import { toast } from "sonner";
 
 interface LeadCardsProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
+  onStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
   isLoading?: boolean;
   hasSearched?: boolean;
 }
@@ -37,6 +39,7 @@ interface LeadCardsProps {
 export function LeadCards({
   leads,
   onLeadClick,
+  onStatusChange,
   isLoading = false,
   hasSearched = false,
 }: LeadCardsProps) {
@@ -201,6 +204,17 @@ export function LeadCards({
                     <span>{lead.openingHours}</span>
                   </div>
                 )}
+
+                <div className="pt-2 border-t flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-muted-foreground">Status</span>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <LeadStatusActions
+                      leadId={lead.id}
+                      currentStatus={lead.status}
+                      onStatusChange={onStatusChange}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </div>
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchGoogleMapsLeads } from "@/lib/scraper";
-import { saveSearchAndLeads } from "@/lib/db";
+import { saveSearchAndLeads, updateLeadStatus } from "@/lib/db";
+import { LeadStatus } from "@/types/lead";
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,6 +64,28 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     return NextResponse.json(
       { success: false, error: (error as Error).message || "Failed to save leads" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { leadId, status } = body as { leadId: string; status: LeadStatus };
+
+    if (!leadId || !status) {
+      return NextResponse.json(
+        { success: false, error: "Missing leadId or status" },
+        { status: 400 }
+      );
+    }
+
+    await updateLeadStatus(leadId, status);
+    return NextResponse.json({ success: true, leadId, status });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { success: false, error: (error as Error).message || "Failed to update lead status" },
       { status: 500 }
     );
   }

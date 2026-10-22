@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { Lead, EmailStatus, LeadStatus } from "@/types/lead";
+import { deduplicateLeads, normalizePhone } from "@/lib/deduplicate";
 
 const databaseUrl =
   process.env.DATABASE_URL ||
@@ -48,6 +49,19 @@ export async function initDatabase() {
   await sql`
     CREATE INDEX IF NOT EXISTS idx_saved_leads_search_id ON saved_leads(search_id);
   `;
+
+  try {
+    await sql`
+      DELETE FROM saved_leads a USING saved_leads b
+      WHERE a.ctid < b.ctid
+        AND a.search_id = b.search_id
+        AND (
+          (a.phone <> '' AND a.phone = b.phone)
+          OR (a.place_id <> '' AND a.place_id = b.place_id)
+          OR (a.name = b.name AND a.city = b.city)
+        );
+    `;
+  } catch {}
 }
 
 export async function saveSearchAndLeads(
@@ -60,6 +74,9 @@ export async function saveSearchAndLeads(
   },
   leads: Lead[]
 ) {
+  const uniqueLeads = deduplicateLeads(leads);
+  search.totalFound = uniqueLeads.length;
+
   await initDatabase();
 
   await sql`
@@ -70,9 +87,16 @@ export async function saveSearchAndLeads(
       created_at = NOW();
   `;
 
-  for (const lead of leads) {
+  for (const lead of uniqueLeads) {
     const socialLinksJson = JSON.stringify(lead.socialLinks || {});
     const enrichmentJson = JSON.stringify(lead.enrichmentDetails || {});
+    const cleanPhone = normalizePhone(lead.phone);
+    const key = cleanPhone && cleanPhone.length >= 10
+      ? cleanPhone
+      : lead.placeId
+      ? lead.placeId.replace(/[^a-zA-Z0-9_-]/g, "")
+      : (lead.name + "-" + (lead.city || lead.state)).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const deterministicId = `lead-${search.id}-${key}`;
 
     await sql`
       INSERT INTO saved_leads (
@@ -81,7 +105,7 @@ export async function saveSearchAndLeads(
         place_id, status, scraped_at, opening_hours, social_links, enrichment_details, created_at
       )
       VALUES (
-        ${lead.id}, ${search.id}, ${lead.name}, ${lead.category}, ${lead.phone || ""},
+        ${deterministicId}, ${search.id}, ${lead.name}, ${lead.category}, ${lead.phone || ""},
         ${lead.email || null}, ${lead.emailStatus || "not_found"}, ${lead.website || ""},
         ${lead.address || ""}, ${lead.city || ""}, ${lead.state || ""}, ${lead.zip || ""},
         ${lead.rating || 0}, ${lead.reviewCount || 0}, ${lead.placeId || ""}, ${lead.status || "New"},
@@ -131,7 +155,7 @@ export async function getLeadsBySearchId(searchId: string): Promise<Lead[]> {
     ORDER BY rating DESC;
   `;
 
-  return rows.map((r) => ({
+  const mapped = rows.map((r) => ({
     id: String(r.id),
     name: String(r.name),
     category: String(r.category),
@@ -152,6 +176,8 @@ export async function getLeadsBySearchId(searchId: string): Promise<Lead[]> {
     socialLinks: (r.social_links as Lead["socialLinks"]) || {},
     enrichmentDetails: (r.enrichment_details as Lead["enrichmentDetails"]) || {},
   }));
+
+  return deduplicateLeads(mapped);
 }
 
 export async function getAllSavedLeads(): Promise<Lead[]> {
@@ -167,7 +193,7 @@ export async function getAllSavedLeads(): Promise<Lead[]> {
     LIMIT 200;
   `;
 
-  return rows.map((r) => ({
+  const mapped = rows.map((r) => ({
     id: String(r.id),
     name: String(r.name),
     category: String(r.category),
@@ -188,6 +214,8 @@ export async function getAllSavedLeads(): Promise<Lead[]> {
     socialLinks: (r.social_links as Lead["socialLinks"]) || {},
     enrichmentDetails: (r.enrichment_details as Lead["enrichmentDetails"]) || {},
   }));
+
+  return deduplicateLeads(mapped);
 }
 
 export async function deleteSearchHistory(searchId?: string) {
@@ -199,4 +227,13 @@ export async function deleteSearchHistory(searchId?: string) {
     await sql`DELETE FROM saved_leads;`;
     await sql`DELETE FROM search_history;`;
   }
+}
+
+export async function updateLeadStatus(leadId: string, status: LeadStatus) {
+  await initDatabase();
+  await sql`
+    UPDATE saved_leads
+    SET status = ${status}
+    WHERE id = ${leadId};
+  `;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   History,
@@ -12,6 +12,11 @@ import {
   Building,
   ArrowLeft,
   RefreshCw,
+  Check,
+  X,
+  Clock,
+  CalendarClock,
+  ThumbsUp,
 } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { LeadTable } from "@/components/lead-table";
@@ -22,9 +27,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Lead } from "@/types/lead";
+import { Lead, LeadStatus } from "@/types/lead";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { deduplicateLeads } from "@/lib/deduplicate";
 
 interface SearchHistoryItem {
   id: string;
@@ -48,16 +54,53 @@ export default function HistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("table");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      ALL: leads.length,
+      Approved: 0,
+      Rejected: 0,
+      Pending: 0,
+      "Follow Up": 0,
+      Interested: 0,
+      New: 0,
+    };
+    for (const l of leads) {
+      const s = l.status || "New";
+      if (counts[s] !== undefined) {
+        counts[s] += 1;
+      } else {
+        counts.New += 1;
+      }
+    }
+    return counts;
+  }, [leads]);
+
+  const displayedLeads = useMemo(() => {
+    if (statusFilter === "ALL") return leads;
+    return leads.filter((l) => (l.status || "New") === statusFilter);
+  }, [leads, statusFilter]);
+
+  const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
+    setLeads((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
+    );
+    if (activeLead && activeLead.id === leadId) {
+      setActiveLead((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
+  };
 
   const loadSearchLeads = useCallback(async (item: SearchHistoryItem) => {
     setSelectedSearch(item);
     setIsLoadingLeads(true);
     setSelectedLeadIds([]);
+    setStatusFilter("ALL");
     try {
       const res = await fetch(`/api/history?searchId=${item.id}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.leads)) {
-        setLeads(data.leads);
+        setLeads(deduplicateLeads(data.leads));
       }
     } catch {
       toast.error("Failed to load leads for this search");
@@ -311,67 +354,183 @@ export default function HistoryPage() {
 
             <div className="lg:col-span-8 space-y-4">
               {selectedSearch && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-bold tracking-tight">
-                        {selectedSearch.query ? `"${selectedSearch.query}"` : selectedSearch.category}
-                      </h2>
-                      <Badge variant="secondary" className="text-xs">
-                        {selectedSearch.state}
-                      </Badge>
+                <div className="space-y-3 border-b pb-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-bold tracking-tight">
+                          {selectedSearch.query ? `"${selectedSearch.query}"` : selectedSearch.category}
+                        </h2>
+                        <Badge variant="secondary" className="text-xs">
+                          {selectedSearch.state}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {leads.length} saved leads retrieved from database
+                        {statusFilter !== "ALL" && ` • Showing ${displayedLeads.length} ${statusFilter}`}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {leads.length} saved leads retrieved from Neon
-                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <Tabs
+                        value={activeTab}
+                        onValueChange={(val) => {
+                          if (val) setActiveTab(val);
+                        }}
+                      >
+                        <TabsList className="h-8">
+                          <TabsTrigger value="table" className="text-xs gap-1.5 px-2.5">
+                            <TableIcon className="size-3.5" />
+                            <span>Table</span>
+                          </TabsTrigger>
+                          <TabsTrigger value="cards" className="text-xs gap-1.5 px-2.5">
+                            <LayoutGrid className="size-3.5" />
+                            <span>Cards</span>
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsExportOpen(true)}
+                        disabled={displayedLeads.length === 0}
+                        className="gap-1.5 h-8 text-xs"
+                      >
+                        <Download className="size-3.5" />
+                        <span>Export CSV</span>
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Tabs
-                      value={activeTab}
-                      onValueChange={(val) => {
-                        if (val) setActiveTab(val);
-                      }}
-                    >
-                      <TabsList className="h-8">
-                        <TabsTrigger value="table" className="text-xs gap-1.5 px-2.5">
-                          <TableIcon className="size-3.5" />
-                          <span>Table</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="cards" className="text-xs gap-1.5 px-2.5">
-                          <LayoutGrid className="size-3.5" />
-                          <span>Cards</span>
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+                  {leads.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("ALL")}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                          statusFilter === "ALL"
+                            ? "bg-foreground text-background border-foreground"
+                            : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted"
+                        )}
+                      >
+                        <span>All</span>
+                        <span className="opacity-70 text-[10px]">({statusCounts.ALL})</span>
+                      </button>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsExportOpen(true)}
-                      disabled={leads.length === 0}
-                      className="gap-1.5 h-8 text-xs"
-                    >
-                      <Download className="size-3.5" />
-                      <span>Export CSV</span>
-                    </Button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("Approved")}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                          statusFilter === "Approved"
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20"
+                        )}
+                      >
+                        <Check className="size-3" />
+                        <span>Approved</span>
+                        <span className="opacity-70 text-[10px]">({statusCounts.Approved})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("Rejected")}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                          statusFilter === "Rejected"
+                            ? "bg-rose-600 text-white border-rose-600"
+                            : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20 hover:bg-rose-500/20"
+                        )}
+                      >
+                        <X className="size-3" />
+                        <span>Rejected</span>
+                        <span className="opacity-70 text-[10px]">({statusCounts.Rejected})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("Pending")}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                          statusFilter === "Pending"
+                            ? "bg-amber-600 text-white border-amber-600"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 hover:bg-amber-500/20"
+                        )}
+                      >
+                        <Clock className="size-3" />
+                        <span>Pending</span>
+                        <span className="opacity-70 text-[10px]">({statusCounts.Pending})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("Follow Up")}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                          statusFilter === "Follow Up"
+                            ? "bg-sky-600 text-white border-sky-600"
+                            : "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20 hover:bg-sky-500/20"
+                        )}
+                      >
+                        <CalendarClock className="size-3" />
+                        <span>Call Tomorrow</span>
+                        <span className="opacity-70 text-[10px]">({statusCounts["Follow Up"]})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("Interested")}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                          statusFilter === "Interested"
+                            ? "bg-violet-600 text-white border-violet-600"
+                            : "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20 hover:bg-violet-500/20"
+                        )}
+                      >
+                        <ThumbsUp className="size-3" />
+                        <span>Interested</span>
+                        <span className="opacity-70 text-[10px]">({statusCounts.Interested})</span>
+                      </button>
+
+                      {statusCounts.New > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setStatusFilter("New")}
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
+                            statusFilter === "New"
+                              ? "bg-muted-foreground text-background border-muted-foreground"
+                              : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
+                          )}
+                        >
+                          <span>Unset</span>
+                          <span className="opacity-70 text-[10px]">({statusCounts.New})</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
               {isLoadingLeads ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
                   <RefreshCw className="size-6 animate-spin text-muted-foreground/60 mb-2" />
-                  <p className="text-xs text-muted-foreground">Loading leads from Neon database...</p>
+                  <p className="text-xs text-muted-foreground">Loading leads from database...</p>
                 </div>
-              ) : leads.length === 0 ? (
+              ) : displayedLeads.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
                   <Building className="size-8 text-muted-foreground/60 mb-2" />
-                  <p className="text-xs text-muted-foreground">Select a search on the left to view leads.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {leads.length > 0
+                      ? `No leads with status "${statusFilter}" in this search.`
+                      : "Select a search on the left to view leads."}
+                  </p>
                 </div>
               ) : activeTab === "table" ? (
                 <LeadTable
-                  leads={leads}
+                  leads={displayedLeads}
                   selectedIds={selectedLeadIds}
                   onSelectChange={setSelectedLeadIds}
                   onLeadClick={(lead) => {
@@ -379,15 +538,17 @@ export default function HistoryPage() {
                     setIsDetailOpen(true);
                   }}
                   onExportSelected={() => setIsExportOpen(true)}
+                  onStatusChange={handleStatusChange}
                   hasSearched={true}
                 />
               ) : (
                 <LeadCards
-                  leads={leads}
+                  leads={displayedLeads}
                   onLeadClick={(lead) => {
                     setActiveLead(lead);
                     setIsDetailOpen(true);
                   }}
+                  onStatusChange={handleStatusChange}
                   hasSearched={true}
                 />
               )}
@@ -400,12 +561,13 @@ export default function HistoryPage() {
         lead={activeLead}
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
+        onStatusChange={handleStatusChange}
       />
 
       <ExportDialog
         open={isExportOpen}
         onOpenChange={setIsExportOpen}
-        allLeads={leads}
+        allLeads={displayedLeads}
         selectedIds={selectedLeadIds}
       />
     </div>

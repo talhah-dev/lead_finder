@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Lead } from "@/types/lead";
 import { toast } from "sonner";
+import { deduplicateLeads } from "@/lib/deduplicate";
 
 interface ExportDialogProps {
   open: boolean;
@@ -32,15 +33,18 @@ export function ExportDialog({
     selectedIds.length > 0 ? "selected" : "all"
   );
 
-  const targetLeads =
+  const rawTargetLeads =
     exportMode === "selected" && selectedIds.length > 0
       ? allLeads.filter((l) => selectedIds.includes(l.id))
       : allLeads;
+
+  const targetLeads = deduplicateLeads(rawTargetLeads);
 
   const generateCsv = (leads: Lead[]) => {
     const headers = [
       "Name",
       "Category",
+      "Status",
       "Phone",
       "Email",
       "Website",
@@ -56,6 +60,7 @@ export function ExportDialog({
     const rows = leads.map((l) => [
       `"${(l.name || "").replace(/"/g, '""')}"`,
       `"${(l.category || "").replace(/"/g, '""')}"`,
+      `"${l.status || "New"}"`,
       `"${l.phone || ""}"`,
       `"${l.email || ""}"`,
       `"${l.website || ""}"`,
