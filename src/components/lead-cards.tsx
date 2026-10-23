@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Lead, LeadStatus } from "@/types/lead";
 import { LeadStatusActions } from "@/components/lead-status-actions";
+import { cleanPhone } from "@/lib/deduplicate";
 import { toast } from "sonner";
 
 interface LeadCardsProps {
@@ -147,22 +148,24 @@ export function LeadCards({
                     Phone
                   </span>
                   <div className="flex items-center gap-1 font-mono">
-                    <span>{lead.phone}</span>
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      className="size-5"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyText(lead.phone, "Phone", phoneKey);
-                      }}
-                    >
-                      {copiedKey === phoneKey ? (
-                        <Check className="size-3 text-emerald-600" />
-                      ) : (
-                        <Copy className="size-3" />
-                      )}
-                    </Button>
+                    <span>{cleanPhone(lead.phone) || "—"}</span>
+                    {lead.phone ? (
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="size-5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyText(cleanPhone(lead.phone), "Phone", phoneKey);
+                        }}
+                      >
+                        {copiedKey === phoneKey ? (
+                          <Check className="size-3 text-emerald-600" />
+                        ) : (
+                          <Copy className="size-3" />
+                        )}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 

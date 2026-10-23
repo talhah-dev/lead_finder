@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { Lead, EmailStatus, LeadStatus } from "@/types/lead";
-import { deduplicateLeads, normalizePhone } from "@/lib/deduplicate";
+import { deduplicateLeads, normalizePhone, cleanPhone } from "@/lib/deduplicate";
 
 const databaseUrl =
   process.env.DATABASE_URL ||
@@ -60,6 +60,11 @@ export async function initDatabase() {
           OR (a.place_id <> '' AND a.place_id = b.place_id)
           OR (a.name = b.name AND a.city = b.city)
         );
+    `;
+    await sql`
+      UPDATE saved_leads
+      SET phone = REGEXP_REPLACE(phone, '[^0-9+]', '', 'g')
+      WHERE phone ~ '[^0-9+]';
     `;
   } catch {}
 
@@ -279,9 +284,9 @@ export async function saveSearchAndLeads(
   for (const lead of uniqueLeads) {
     const socialLinksJson = JSON.stringify(lead.socialLinks || {});
     const enrichmentJson = JSON.stringify(lead.enrichmentDetails || {});
-    const cleanPhone = normalizePhone(lead.phone);
-    const key = cleanPhone && cleanPhone.length >= 10
-      ? cleanPhone
+    const normPhone = normalizePhone(lead.phone);
+    const key = normPhone && normPhone.length >= 10
+      ? normPhone
       : lead.placeId
       ? lead.placeId.replace(/[^a-zA-Z0-9_-]/g, "")
       : (lead.name + "-" + (lead.city || lead.state)).toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -294,7 +299,7 @@ export async function saveSearchAndLeads(
         place_id, status, scraped_at, opening_hours, social_links, enrichment_details, created_at
       )
       VALUES (
-        ${deterministicId}, ${search.id}, ${lead.name}, ${lead.category}, ${lead.phone || ""},
+        ${deterministicId}, ${search.id}, ${lead.name}, ${lead.category}, ${cleanPhone(lead.phone)},
         ${lead.email || null}, ${lead.emailStatus || "not_found"}, ${lead.website || ""},
         ${lead.address || ""}, ${lead.city || ""}, ${lead.state || ""}, ${lead.zip || ""},
         ${lead.rating || 0}, ${lead.reviewCount || 0}, ${lead.placeId || ""}, ${lead.status || "New"},
@@ -348,7 +353,7 @@ export async function getLeadsBySearchId(searchId: string): Promise<Lead[]> {
     id: String(r.id),
     name: String(r.name),
     category: String(r.category),
-    phone: String(r.phone || ""),
+    phone: cleanPhone(String(r.phone || "")),
     email: r.email ? String(r.email) : null,
     emailStatus: (r.email_status as EmailStatus) || "not_found",
     website: String(r.website || ""),
@@ -386,7 +391,7 @@ export async function getAllSavedLeads(): Promise<Lead[]> {
     id: String(r.id),
     name: String(r.name),
     category: String(r.category),
-    phone: String(r.phone || ""),
+    phone: cleanPhone(String(r.phone || "")),
     email: r.email ? String(r.email) : null,
     emailStatus: (r.email_status as EmailStatus) || "not_found",
     website: String(r.website || ""),
@@ -554,7 +559,7 @@ export async function getBlacklistedLeads() {
   return rows.map((r) => ({
     id: String(r.id),
     placeId: String(r.place_id || ""),
-    phone: String(r.phone || ""),
+    phone: cleanPhone(String(r.phone || "")),
     website: String(r.website || ""),
     name: String(r.name),
     reason: String(r.reason || "removed_by_user"),

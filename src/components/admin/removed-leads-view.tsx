@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { BlacklistedLead } from "@/types/admin";
+import { cleanPhone } from "@/lib/deduplicate";
 
 export function RemovedLeadsView() {
   const queryClient = useQueryClient();
@@ -155,7 +156,7 @@ export function RemovedLeadsView() {
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground font-mono">
-                    {lead.phone || "—"}
+                    {cleanPhone(lead.phone) || "—"}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {lead.website ? (

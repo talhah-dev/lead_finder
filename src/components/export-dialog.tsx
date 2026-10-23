@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Lead } from "@/types/lead";
 import { toast } from "sonner";
-import { deduplicateLeads } from "@/lib/deduplicate";
+import { deduplicateLeads, cleanPhone } from "@/lib/deduplicate";
 
 interface ExportDialogProps {
   open: boolean;
@@ -61,7 +61,7 @@ export function ExportDialog({
       `"${(l.name || "").replace(/"/g, '""')}"`,
       `"${(l.category || "").replace(/"/g, '""')}"`,
       `"${l.status || "New"}"`,
-      `"${l.phone || ""}"`,
+      `"${cleanPhone(l.phone)}"`,
       `"${l.email || ""}"`,
       `"${l.website || ""}"`,
       `"${(l.address || "").replace(/"/g, '""')}"`,
@@ -94,7 +94,11 @@ export function ExportDialog({
   };
 
   const handleDownloadJson = () => {
-    const jsonData = JSON.stringify(targetLeads, null, 2);
+    const formattedLeads = targetLeads.map((l) => ({
+      ...l,
+      phone: cleanPhone(l.phone),
+    }));
+    const jsonData = JSON.stringify(formattedLeads, null, 2);
     const blob = new Blob([jsonData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

@@ -25,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Lead, LeadStatus } from "@/types/lead";
 import { LeadStatusActions } from "@/components/lead-status-actions";
+import { cleanPhone } from "@/lib/deduplicate";
 import { toast } from "sonner";
 
 interface LeadTableProps {
@@ -301,24 +302,28 @@ export function LeadTable({
                   </TableCell>
 
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-mono">{lead.phone}</span>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="size-6 text-muted-foreground hover:text-foreground"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(lead.phone, "Phone number", phoneKey);
-                        }}
-                      >
-                        {copiedId === phoneKey ? (
-                          <Check className="size-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="size-3" />
-                        )}
-                      </Button>
-                    </div>
+                    {lead.phone ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-mono">{cleanPhone(lead.phone)}</span>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          className="size-6 text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(cleanPhone(lead.phone), "Phone number", phoneKey);
+                          }}
+                        >
+                          {copiedId === phoneKey ? (
+                            <Check className="size-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
 
                   <TableCell>

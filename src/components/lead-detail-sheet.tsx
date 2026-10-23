@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Lead, LeadStatus } from "@/types/lead";
 import { LeadStatusActions } from "@/components/lead-status-actions";
+import { cleanPhone } from "@/lib/deduplicate";
 import { toast } from "sonner";
 
 interface LeadDetailSheetProps {
@@ -52,10 +53,11 @@ export function LeadDetailSheet({
   };
 
   const copyFullCard = () => {
+    const cleanPh = cleanPhone(lead.phone);
     const card = [
       `Business: ${lead.name}`,
       `Category: ${lead.category}`,
-      `Phone: ${lead.phone}`,
+      `Phone: ${cleanPh || "N/A"}`,
       `Email: ${lead.email || "N/A"}`,
       `Website: ${lead.website}`,
       `Address: ${lead.address}, ${lead.city}, ${lead.state} ${lead.zip}`,
@@ -120,23 +122,29 @@ export function LeadDetailSheet({
                   <span>Phone Number</span>
                 </div>
                 <div className="flex items-center gap-1 font-mono">
-                  <a
-                    href={`tel:${lead.phone}`}
-                    className="hover:underline font-medium text-foreground"
-                  >
-                    {lead.phone}
-                  </a>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    onClick={() => copyField(lead.phone, "Phone", "detail-phone")}
-                  >
-                    {copiedKey === "detail-phone" ? (
-                      <Check className="size-3 text-emerald-600" />
-                    ) : (
-                      <Copy className="size-3" />
-                    )}
-                  </Button>
+                  {lead.phone ? (
+                    <>
+                      <a
+                        href={`tel:${cleanPhone(lead.phone)}`}
+                        className="hover:underline font-medium text-foreground"
+                      >
+                        {cleanPhone(lead.phone)}
+                      </a>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() => copyField(cleanPhone(lead.phone), "Phone", "detail-phone")}
+                      >
+                        {copiedKey === "detail-phone" ? (
+                          <Check className="size-3 text-emerald-600" />
+                        ) : (
+                          <Copy className="size-3" />
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </div>
               </div>
 

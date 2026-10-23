@@ -1,5 +1,5 @@
 import { Lead, EmailStatus } from "@/types/lead";
-import { deduplicateLeads, normalizePhone } from "@/lib/deduplicate";
+import { deduplicateLeads, normalizePhone, cleanPhone } from "@/lib/deduplicate";
 import { ExistingLeadIdentifiers, isLeadDuplicate } from "@/lib/db";
 
 const STATE_METROS: Record<string, [number, number][]> = {
@@ -413,7 +413,7 @@ out ${params.limit || 25};
               id: `osm-${el.id}`,
               name,
               category: params.category !== "All Categories" ? params.category : "Local Business",
-              phone,
+              phone: cleanPhone(phone),
               email,
               emailStatus,
               website,
@@ -524,7 +524,7 @@ export async function searchWithNominatim(params: {
               id: `nom-${item.place_id || Math.random().toString(36).slice(2, 9)}`,
               name,
               category: params.category !== "All Categories" ? params.category : "Local Business",
-              phone,
+              phone: cleanPhone(phone),
               email,
               emailStatus,
               website,
@@ -669,7 +669,7 @@ for (const item of (data.local_results as SerpApiLocalResult[])) {
               params.category !== "All Categories"
                 ? params.category
                 : item.type || "Local Business",
-            phone: item.phone || "",
+            phone: cleanPhone(item.phone || ""),
             email,
             emailStatus,
             website,

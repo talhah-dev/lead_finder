@@ -1,5 +1,14 @@
 import { Lead } from "@/types/lead";
 
+export function cleanPhone(phone?: string | null): string {
+  if (!phone) return "";
+  const trimmed = phone.trim();
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
+  return hasPlus ? `+${digits}` : digits;
+}
+
 export function normalizePhone(phone: string): string {
   if (!phone) return "";
   const digits = phone.replace(/\D/g, "");
@@ -8,6 +17,7 @@ export function normalizePhone(phone: string): string {
   }
   return digits;
 }
+
 
 export function normalizeDomain(url: string): string {
   if (!url) return "";
